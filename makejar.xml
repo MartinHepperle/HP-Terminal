@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project default="create_run_jar" name="Create Runnable Jar for Project HPTerminal">
+    <!--this file was created by Eclipse Runnable JAR Export Wizard-->
+    <!--ANT 1.7 is required                                        -->
+    <target name="create_run_jar">
+
+    	<delete dir="./bin/mh/rsc"/>
+        <mkdir dir="./bin/mh/rsc"/>
+        <copy file="resources/icnAlpha.png" todir="./bin/mh/rsc"/>
+        <copy file="resources/icnGraph.png" todir="./bin/mh/rsc"/>
+        <copy file="resources/combinedalpha-16x30.png" todir="./bin/mh/rsc"/>
+        <copy file="resources/beep.wav" todir="./bin/mh/rsc"/>
+        <copy file="resources/HPTerminal.ttf" todir="./bin/mh/rsc"/>
+ 
+        <jar destfile="./HPTerminal.jar" filesetmanifest="mergewithoutmain">
+            <manifest>
+                <attribute name="Main-Class" value="mh.HPTerminalApplication"/>
+                <attribute name="Class-Path" value="."/>
+            </manifest>
+            <fileset dir="./bin"/>
+            <fileset dir="./resources" includes="*.pdf" excludes="*.docx"/>
+            <fileset dir="./resources" includes="*.cmd,*.sh"/>
+            <zipfileset excludes="META-INF/*.SF" src="D:/Java/jSSC-2.6.0-Release/jssc.jar"/>
+        </jar>
+    </target>
+</project>
