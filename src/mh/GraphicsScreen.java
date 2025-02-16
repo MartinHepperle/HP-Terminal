@@ -1,21 +1,19 @@
 package mh;
 
 import java.awt.BasicStroke;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Frame;
 import java.awt.Graphics;
-import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Polygon;
 import java.awt.RenderingHints;
-import java.awt.Stroke;
 import java.awt.Toolkit;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
-import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -35,9 +33,9 @@ import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 
 /**
- * 
+ *
  * @author Martin Hepperle
- * 
+ *
  */
 public class GraphicsScreen extends JPanel implements MouseListener,
 		KeyListener, ActionListener, Transferable
@@ -145,7 +143,7 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Returns an object which represents the data to be transferred.
-	 * 
+	 *
 	 * @param flavor
 	 *            DataFlavor
 	 * @return Object
@@ -164,7 +162,7 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 	/**
 	 * Returns an array of DataFlavor objects indicating the flavors the data
 	 * can be provided in.
-	 * 
+	 *
 	 * @return DataFlavor[]
 	 */
 	public DataFlavor[] getTransferDataFlavors ()
@@ -183,7 +181,7 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 	/**
 	 * Returns whether or not the specified data flavor is supported for this
 	 * object
-	 * 
+	 *
 	 * @param flavor
 	 *            DataFlavor
 	 * @return boolean true if DataFalvor is "image/x-java-image".
@@ -348,7 +346,7 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 		g.drawLine(8, -10, 12, -10);
 		g.drawLine(10, -8, 10, -12);
 		vf.setSize(10, 20);
-		vf.drawString(g, "Hello World 1/2 {[]}@ƒ÷‹ﬂ’‹›ﬁ", 10, -10);
+		vf.drawString(g, "Hello World 1/2 {[]}@√Ñ√ñ√ú√ü√ï√ú√ù√û", 10, -10);
 
 		repaint(100);
 	}
@@ -382,8 +380,9 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 
 		setLineStyle(1);
 
-		if (hard)
+		if (hard) {
 			clear();
+		}
 	}
 
 	void setScreenSize ( int w, int h )
@@ -410,21 +409,22 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Toggle the display of the graphics cursor.
-	 * 
+	 *
 	 * @param visible
 	 */
 	public void showGraphicsCursor ( boolean visible )
 	{
 		m_graphicsCursor = visible;
 
-		if (m_graphicsCursor)
+		if (m_graphicsCursor) {
 			setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
-		else
+		} else {
 			setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
+		}
 	}
 
 	/**
-	 * 
+	 *
 	 * @return the key code sampled when a waitForClick() state was enabled:
 	 *         <ul>
 	 *         <li>32...127: key code</li>
@@ -439,7 +439,7 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 	}
 
 	/**
-	 * 
+	 *
 	 * @return
 	 */
 	public Point getCursorPosition ()
@@ -486,7 +486,7 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 	}
 
 	/**
-	 * 
+	 *
 	 * @return the current position of the pen.
 	 */
 	public Point getPenPosition ()
@@ -495,7 +495,7 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 	}
 
 	/**
-	 * 
+	 *
 	 * @return true if pen is down (after a lineto), false if not (after a
 	 *         moveto)
 	 */
@@ -507,7 +507,7 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 	/**
 	 * Define line style similar to HP 2648A line styles. Does not support user
 	 * defined styles.
-	 * 
+	 *
 	 * @param n
 	 *            the line style:<br>
 	 *            1=continuous,<br>
@@ -563,7 +563,7 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Move the pen to the given point.
-	 * 
+	 *
 	 * @param pt
 	 *            the point to move to. It becomes the "current point".
 	 */
@@ -575,7 +575,7 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Draw a line from the "current point" to the given point.
-	 * 
+	 *
 	 * @param pt
 	 *            the point to draw to.
 	 */
@@ -637,7 +637,7 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Fill the given rectangle.
-	 * 
+	 *
 	 * @param x
 	 *            - the x-position of the upper left corner point.
 	 * @param y
@@ -776,7 +776,7 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 	}
 
 	/**
-	 * 
+	 *
 	 * @param idxColor
 	 *            - if == 0: default: track primary pen
 	 */
@@ -795,7 +795,7 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 	}
 
 	/**
-	 * 
+	 *
 	 * @param size
 	 *            - the size of an uppercase letter, e.g. 'A'
 	 *            <ul>
@@ -824,11 +824,11 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Set the text orientation.
-	 * 
+	 *
 	 * @param orientation
 	 *            the direction of the baseline in degrees (extension of the HP
 	 *            specification)
-	 * 
+	 *
 	 */
 	void setTextOrientation ( int orientation )
 	{
@@ -855,7 +855,7 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 	/**
 	 * Save the current image to a file in PNG format. No file is written if the
 	 * image is empty.
-	 * 
+	 *
 	 * @param fileName
 	 *            - the name of the file to write. Any extension is stripped and
 	 *            replaced by ".png".
@@ -906,7 +906,7 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 	}
 
 	/**
-	 * 
+	 *
 	 * @return true if a mouse click or key press was registered.
 	 */
 	public boolean wasClicked ()
@@ -949,7 +949,7 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 	 * stored. <br>
 	 * These codes are translated by the CP/M GSX system display driver into 32
 	 * (' '), 33 ('!') respectively 34 ('"').
-	 * 
+	 *
 	 * @param e
 	 *            the MouseEvent to test.
 	 */
@@ -958,12 +958,14 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 		if (m_graphicsCursor)
 		{
 			m_ptCursor = new Point(e.getPoint());
-			if (e.getButton() == MouseEvent.BUTTON1)
+			if (e.getButton() == MouseEvent.BUTTON1) {
 				m_keyCode = 232; // left
-			else if (e.getButton() == MouseEvent.BUTTON3)
+			} else if (e.getButton() == MouseEvent.BUTTON3) {
 				m_keyCode = 233; // right
-			else
+			}
+			else {
 				m_keyCode = 234; // middle
+			}
 
 			// set flag
 			m_clicked = true;
@@ -993,7 +995,7 @@ public class GraphicsScreen extends JPanel implements MouseListener,
 	/**
 	 * Called when a keyboard key is typed. If the graphics cursor is visible
 	 * the current cursor position and the key character code are stored.
-	 * 
+	 *
 	 * @param e
 	 */
 	private void handleKeyTyped ( KeyEvent e )

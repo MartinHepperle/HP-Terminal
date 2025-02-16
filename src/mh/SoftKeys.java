@@ -3,15 +3,14 @@ package mh;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Point;
-import java.awt.event.KeyEvent;
 
 /**
  * row 1 [shift f1] [shift f2] [shift f3] [shift f4] - [5] [6] [7] [8]<br>
  * row 0 [norml f1] [norml f2] [norml f3] [norml f4] - [5] [6] [7] [8]<br>
  * column....0..........1..........2..........3.........4...5...6...7<br>
- * 
+ *
  * @author ea55
- * 
+ *
  */
 public class SoftKeys
 {
@@ -46,7 +45,7 @@ public class SoftKeys
 	}
 
 	/**
-	 * 
+	 *
 	 * @param row
 	 *            [0...1]
 	 * @param col
@@ -60,7 +59,7 @@ public class SoftKeys
 
 	/**
 	 * Copy up to eight characters into the soft key caption
-	 * 
+	 *
 	 * @param row
 	 *            [0...1]
 	 * @param col
@@ -70,10 +69,11 @@ public class SoftKeys
 	 */
 	public void setButtonText ( int row, int col, String text )
 	{
-		if (text.length() > 8)
+		if (text.length() > 8) {
 			buttonLabel[col + row * 8] = text.substring(0, 8);
-		else
+		} else {
 			buttonLabel[col + row * 8] = text;
+		}
 	}
 
 	public void setButtonCommand ( int row, int col, String command )
@@ -82,7 +82,7 @@ public class SoftKeys
 	}
 
 	/**
-	 * 
+	 *
 	 * @param pt
 	 *            the point which is to be tested, usually the current mouse
 	 *            position.

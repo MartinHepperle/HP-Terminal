@@ -6,11 +6,11 @@ import java.awt.Point;
 /**
  * <pre>
  *  Compact form of HP150 vector font.
- * 
+ *
  *  origin: at upper left of cell.
  *  x positive to the right
  *  y positive down
- * 
+ *
  *          'A'       '['    ...  example characters
  *  row
  * 10:   6:  o--- A---+   [[[[    --- umlauts
@@ -20,7 +20,7 @@ import java.awt.Point;
  *           |  AAAAA |   [       0 ... 6 = 7 nominal character height
  *           |  A   A |   [
  *  4:   0:  | _A__ A_|   [       ___ base line
- *           |    |   |   [       
+ *           |    |   |   [
  *      -2:  + ---+---+   [[[[    --- underline
  *  1:        01234567
  *  character height = 7
@@ -29,9 +29,9 @@ import java.awt.Point;
  *  cell with: 8
  *  0x7f = 127 is a "pen up" code, the pen is lowered again at the next point
  * </pre>
- * 
+ *
  * @author Martin Hepperle
- * 
+ *
  */
 public class VectorFont
 {
@@ -527,7 +527,7 @@ public class VectorFont
 
 	/**
 	 * Draw a string with this font.
-	 * 
+	 *
 	 * @param g
 	 *            - the context to draw on.
 	 * @param s
@@ -540,7 +540,7 @@ public class VectorFont
 
 	/**
 	 * Set the character size of a capital letter (e.g. 'A' or 'X')
-	 * 
+	 *
 	 * @param sx
 	 *            - width in pixels
 	 * @param sy
@@ -561,7 +561,7 @@ public class VectorFont
 	/**
 	 * The reference point for the rotation is at the baseline lower left corner
 	 * of the character cell.
-	 * 
+	 *
 	 * @param angle
 	 *            angle between baseline and x-axis in degrees (extension of HP
 	 *            specification)<br>
@@ -573,7 +573,7 @@ public class VectorFont
 
 	/**
 	 * Draw a string.
-	 * 
+	 *
 	 * @param g
 	 *            the context to draw into.
 	 * @param s
@@ -598,7 +598,7 @@ public class VectorFont
 
 	/**
 	 * Draw a single character.
-	 * 
+	 *
 	 * @param g
 	 *            - The context to draw into.
 	 * @param c
@@ -622,11 +622,11 @@ public class VectorFont
 
 			byte bb[] = charVector[c];
 
-			int pointCount = (int) bb[1];
-			int charWidth = (int) bb[0];
+			int pointCount = bb[1];
+			int charWidth = bb[0];
 
 			// actual width (unrotated)
-			charWidth = (int) ((float) charWidth * m_xFactor);
+			charWidth = (int) (charWidth * m_xFactor);
 
 			// advance vector (rotated)
 			ret.x = dxTransformed(charWidth, 0);
@@ -652,8 +652,9 @@ public class VectorFont
 						xPt = bb[i++] & 0xff;
 						int yPt = bb[i++] & 0xff;
 
-						if (m_slanted)
+						if (m_slanted) {
 							xPt += (yPt - 10) / m_xFactor;
+						}
 
 						dx = (int) (xPt * m_xFactor);
 						dy = (int) (yPt * m_yFactor);
@@ -665,8 +666,9 @@ public class VectorFont
 					{
 						// lineto
 						int yPt = bb[i++] & 0xff;
-						if (m_slanted)
+						if (m_slanted) {
 							xPt += (yPt - 10) / m_xFactor;
+						}
 
 						dx = (int) (xPt * m_xFactor);
 						dy = (int) (yPt * m_yFactor);
@@ -679,8 +681,9 @@ public class VectorFont
 					}
 
 					// done?
-					if (i == 2 + pointCount)
+					if (i == 2 + pointCount) {
 						break;
+					}
 
 					// next point
 					xPt = bb[i++] & 0xff;
@@ -694,11 +697,11 @@ public class VectorFont
 	/**
 	 * Determine the x-coordinate of a point rotated in steps of 90 degrees.
 	 * Uses the private variable m_angle.
-	 * 
+	 *
 	 * dxTransformed = dx*cos(phi) - dy*sin(phi)
-	 * 
+	 *
 	 * (Coordinate system: positive y = down)
-	 * 
+	 *
 	 * @param dx
 	 *            - The x coordinate of the point to transform.
 	 * @param dy
@@ -727,11 +730,11 @@ public class VectorFont
 	/**
 	 * Determine the y-coordinate of a point rotated in steps of 90 degrees.
 	 * Uses the private variable m_angle.
-	 * 
+	 *
 	 * dyTransformed = -(dx*sin(phi) + dy*cos(phi))
-	 * 
+	 *
 	 * (Coordinate system: positive y = down)
-	 * 
+	 *
 	 * @param dx
 	 *            - The x coordinate of the point to transform.
 	 * @param dy

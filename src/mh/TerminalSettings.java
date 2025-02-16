@@ -7,9 +7,9 @@ import jssc.SerialPort;
 
 /**
  * A container to hold various general terminal settings.
- * 
+ *
  * @author Martin Hepperle, July 2019
- * 
+ *
  */
 public class TerminalSettings
 {
@@ -35,6 +35,12 @@ public class TerminalSettings
 	protected int height;
 
 	protected String PortName;
+	
+	protected int telnetPort;
+	
+	protected String telnetHost;
+	
+	protected boolean graphicsVisible;
 
 	int FontSize;
 
@@ -43,13 +49,16 @@ public class TerminalSettings
 		// default: HP emulation
 		// ENQ/ACK protocol?
 		ENQ_ACK = true;
-		speed = SerialPort.BAUDRATE_9600;
+        speed = SerialPort.BAUDRATE_9600;
 		PortName = "COM1";
 		// ENTER key sends CR 0x0D
 		ENTER = 13;
 		setTerminalID(HP2627A);
 		FontSize = 16;
 		Sound = true;
+		telnetHost = "";
+		telnetPort = 23;
+		graphicsVisible= false;
 	}
 
 	public void setTerminalID ( int id )
@@ -89,6 +98,10 @@ public class TerminalSettings
 		p.putInt("Port.speed", speed);
 		p.putBoolean("Sound", Sound);
 		p.putInt("TerminalID", TerminalID);
+		p.put("TelnetHost", telnetHost);
+		p.putInt("TelnetPort", telnetPort);
+		p.putBoolean("GraphicsVisible",graphicsVisible);
+				
 	}
 
 	public void readPreferences ( Preferences p )
@@ -96,9 +109,12 @@ public class TerminalSettings
 		FontSize = p.getInt("Font.size", 12);
 		PortName = p.get("Port.name", "COM1");
 		speed = p.getInt("Port.speed", SerialPort.BAUDRATE_9600);
-		Sound = p.getBoolean("Sound", true);
+		Sound = p.getBoolean("Sound", true); 
 		TerminalID = p.getInt("TerminalID", 100);
+		telnetHost=p.get("TelnetHost","localhost");
+		telnetPort=p.getInt("TelnetPort", 23);
 		setTerminalID(TerminalID);
+		graphicsVisible=p.getBoolean("GraphicsVisible",false);
 	}
 
 	public void dump ( PrintStream fs )
@@ -109,5 +125,9 @@ public class TerminalSettings
 		fs.println("AnswerBack      \t= '" + AnswerBack + "'");
 		fs.println("Port            \t= '" + PortName + "'");
 		fs.println("Speed           \t= " + speed + " Baud");
+		fs.println("ENTER           \t= " + ENTER);
+		fs.println("Telnet Host     \t= "+  telnetHost);
+		fs.println("Telnet Port     \t= "+  telnetPort);
+		fs.println("Graphics visible\t= "+ graphicsVisible);
 	}
 }

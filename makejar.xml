@@ -2,7 +2,28 @@
 <project default="create_run_jar" name="Create Runnable Jar for Project HPTerminal">
     <!--this file was created by Eclipse Runnable JAR Export Wizard-->
     <!--ANT 1.7 is required                                        -->
-    <target name="create_run_jar">
+    <property name="src" location="./src"/>
+    <property name="bin" location="./bin"/>
+    <property name="lib" location="./lib"/>
+
+    <target name="init">
+    <!-- Create the time stamp -->
+    <tstamp/>
+    <!-- Create the build directory structure used by compile -->
+    <mkdir dir="${bin}/mh"/>
+    </target>
+
+    <target name="compile" description="compile the source" depends="init">
+    <javac srcdir="${src}" destdir="${bin}">
+        <classpath>
+            <fileset dir="${lib}">
+                <include name="*.jar" />
+            </fileset>
+        </classpath>
+    </javac>
+    </target>
+
+    <target name="create_run_jar" depends="compile">
 
     	<delete dir="./bin/mh/rsc"/>
         <mkdir dir="./bin/mh/rsc"/>
@@ -20,7 +41,11 @@
             <fileset dir="./bin"/>
             <fileset dir="./resources" includes="*.pdf" excludes="*.docx"/>
             <fileset dir="./resources" includes="*.cmd,*.sh"/>
-            <zipfileset excludes="META-INF/*.SF" src="D:/Java/jSSC-2.6.0-Release/jssc.jar"/>
+            <zipgroupfileset dir="${lib}" includes="*.jar"/>
         </jar>
+    </target>
+    <target name="clean" description="clean up">
+    <delete dir ="${bin}"/>
+    <delete file ="./HPTerminal.jar"/>
     </target>
 </project>

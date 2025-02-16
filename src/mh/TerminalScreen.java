@@ -2,8 +2,8 @@ package mh;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
-import java.awt.Event;
 import java.awt.Font;
 import java.awt.FontFormatException;
 import java.awt.Frame;
@@ -14,35 +14,30 @@ import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Stroke;
 import java.awt.Toolkit;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URL;
-import java.time.ZonedDateTime;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.Timer;
-import java.util.TimerTask;
-
-import javax.swing.JPanel;
-
-import com.sun.glass.events.KeyEvent;
-
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
-import javax.swing.JPopupMenu;
-import java.awt.Component;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import java.util.Calendar;
+import java.util.Timer;
+import java.util.TimerTask;
+
 import javax.swing.JMenuItem;
-import java.awt.event.ActionListener;
-import java.awt.event.ActionEvent;
+import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 
 /**
  * A terminal screen panel.
- * 
+ *
  * @author Martin Hepperle, July 2019
- * 
+ *
  */
 public class TerminalScreen extends JPanel implements MouseListener,
 		ActionListener
@@ -138,6 +133,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 	private boolean wrapLines;
 	private boolean m_insertMode;
 	private boolean m_keyboardLocked;
+	private boolean m_remoteMode;
 
 	// The bitmapped font
 	// It is scaled by a factor of 2 to accomplish half pixel resolution.
@@ -147,7 +143,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Create the screen panel.
-	 * 
+	 *
 	 * @param f
 	 *            The parent JFrame.
 	 * @param name
@@ -241,8 +237,9 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 		saveCursor();
 
-		if (hard)
+		if (hard) {
 			clearMemory();
+		}
 
 		setDefaultTabs(8);
 	}
@@ -298,10 +295,11 @@ public class TerminalScreen extends JPanel implements MouseListener,
 		yCursor += dy;
 
 		currentCharSet = CS_ROMAN;
-
+		/*
 		String str = String.format("Memory: %d pages",
 				new Object[] { new Integer(PAGES) });
-
+		*/
+		String str = String.format("Memory: %d pages",PAGES);
 		drawString(g, str, 32, yCursor);
 		yCursor += dy;
 
@@ -327,21 +325,22 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Select one of the two available character sets.
-	 * 
+	 *
 	 * @param idxSet
 	 *            - either CS_PRIMARY or CS_ALTERNATE.
 	 */
 	public void selectCharset ( int idxSet )
 	{
-		if (idxSet == CS_ALTERNATE)
+		if (idxSet == CS_ALTERNATE) {
 			currentCharSet = alternateCharSet;
-		else
+		} else {
 			currentCharSet = primaryCharSet;
+		}
 	}
 
 	/**
 	 * Define the font to be used for the primary character set.
-	 * 
+	 *
 	 * @param charSet
 	 *            - either CS_ROMAN, CS_LINEDRAW or CS_MATH.
 	 */
@@ -352,7 +351,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Define the font to be used for the alternate character set.
-	 * 
+	 *
 	 * @param charSet
 	 *            either - CS_ROMAN, CS_LINEDRAW or CS_MATH.
 	 */
@@ -363,7 +362,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Set a new font size and size window accordingly.
-	 * 
+	 *
 	 * @param size
 	 *            The new font size in pixels.
 	 */
@@ -377,7 +376,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 		/*
 		 * Create a temporary graphics context for determining font dimensions
 		 * etc.
-		 * 
+		 *
 		 * BufferedImage biPaper = new BufferedImage(8, 8,
 		 * BufferedImage.TYPE_BYTE_INDEXED); Graphics g = biPaper.getGraphics();
 		 * FontMetrics theMetrics = g.getFontMetrics(theFont); dx =
@@ -408,7 +407,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Load a TrueType font and return a scaled instance.
-	 * 
+	 *
 	 * @param fontFileName
 	 *            The name of the font file.
 	 * @param size
@@ -454,7 +453,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Create a new Color from the inverted RGB components of the given color.
-	 * 
+	 *
 	 * @param c
 	 *            the Color to invert
 	 * @return a new Color with the R, G, B components inverted.
@@ -470,31 +469,33 @@ public class TerminalScreen extends JPanel implements MouseListener,
 	 */
 	public void clearAllTabs ()
 	{
-		for (int i = 0; i < WIDTH; i++)
+		for (int i = 0; i < WIDTH; i++) {
 			tabStop[i] = 0;
+		}
 	}
 
 	/**
 	 * Distribute TAB stops in regular intervals.
-	 * 
+	 *
 	 * @param step
 	 *            The horizontal position increment from TAB to TAB. <br>
-	 * 
+	 *
 	 *            Example: TAB step = 5 - a TAB in in every 5th column.
-	 * 
+	 *
 	 *            <pre>
 	 *            1   5   9   13  17  21   screen coordinates
-	 *            |   |   |   |   |   | 
+	 *            |   |   |   |   |   |
 	 *            123456789012345678901234567890
-	 *            |   |   |   |   |   |  
+	 *            |   |   |   |   |   |
 	 *            0   4   8   12  16  20   array index
 	 * </pre>
 	 */
 	public void setDefaultTabs ( int step )
 	{
 		clearAllTabs();
-		for (int i = 0; i < WIDTH; i += (step - 1))
+		for (int i = 0; i < WIDTH; i += (step - 1)) {
 			tabStop[i] = 1;
+		}
 	}
 
 	/**
@@ -515,31 +516,33 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Set a TAB stop at the given cursor position.
-	 * 
+	 *
 	 * @param x
 	 *            The horizontal position where a TAB stop is set [1...WIDTH].
 	 */
 	public void setTab ( int x )
 	{
-		if (x <= WIDTH && x > 0)
+		if (x <= WIDTH && x > 0) {
 			tabStop[x - 1] = 1;
+		}
 	}
 
 	/**
 	 * Clear any TAB stop at the given cursor position.
-	 * 
+	 *
 	 * @param x
 	 *            The horizontal position where a TAB stop is removed
 	 *            [1...WIDTH].
 	 */
 	public void clearTab ( int x )
 	{
-		if (x <= WIDTH && x > 0)
+		if (x <= WIDTH && x > 0) {
 			tabStop[x - 1] = 0;
+		}
 	}
 
 	/**
-	 * 
+	 *
 	 * @return The next TAB position in [1...WIDTH].<br>
 	 *         If there is no following TAB stop the current position is
 	 *         returned,
@@ -549,19 +552,22 @@ public class TerminalScreen extends JPanel implements MouseListener,
 		// start one column after current position
 		int i = xCursor + 1;
 
-		for (; i < WIDTH; i++)
-			if (tabStop[i] == 1)
+		for (; i < WIDTH; i++) {
+			if (tabStop[i] == 1) {
 				break;
+			}
+		}
 
 		// no tab found: stay where we are
-		if (i == WIDTH)
+		if (i == WIDTH) {
 			i = xCursor;
+		}
 
 		return i;
 	}
 
 	/**
-	 * 
+	 *
 	 * @return The previous TAB position in [1...WIDTH].<br>
 	 *         If there is no preceding TAB stop the current position is
 	 *         returned,
@@ -571,13 +577,16 @@ public class TerminalScreen extends JPanel implements MouseListener,
 		// start one column before current position
 		int i = xCursor - 1;
 
-		for (; i >= 0; i--)
-			if (tabStop[i] == 1)
+		for (; i >= 0; i--) {
+			if (tabStop[i] == 1) {
 				break;
+			}
+		}
 
 		// no tab found: stay where we are
-		if (i < 0)
+		if (i < 0) {
 			i = xCursor;
+		}
 
 		return i;
 	}
@@ -598,7 +607,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Define the behavior of the cursor at the end of a line.
-	 * 
+	 *
 	 * @param enable
 	 *            if true, the cursor wraps to the next line. The screen scrolls
 	 *            up if the end of the view is reached and the cursor is not yet
@@ -629,7 +638,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 	/**
 	 * Fill a region of memory by filling with Space characters. Also resets the
 	 * attribute byte for each cell.
-	 * 
+	 *
 	 * @param idxFirst
 	 *            index of first character to clear.
 	 * @param idxLast
@@ -645,11 +654,23 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 		repaint(10);
 	}
+	
+	/**
+	 * Set the remote/local mode
+	 * 
+	 * @param onoff
+	 * 		True, if remote mode (terminal connected)
+	 */
+	public void setRemoteMode (boolean onoff)
+	{
+		m_remoteMode = onoff;
+		repaint(100);
+	}
 
 	/**
 	 * Set the character insert mode. If true, subsequent characters are
 	 * inserted, otherwise they overwrite.
-	 * 
+	 *
 	 * @param onoff
 	 *            True if the insert mode shall be activated, otherwise False.
 	 */
@@ -670,7 +691,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Set the keyboard locked flag.
-	 * 
+	 *
 	 * @param yesno
 	 *            True if the keyboard shall be locked, False otherwise..
 	 */
@@ -690,7 +711,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Set the cursor visibility flag.
-	 * 
+	 *
 	 * @param yesno
 	 *            True if the cursor shall be shown, False otherwise..
 	 */
@@ -705,7 +726,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 	 * following characters up to the end of the line are shifted right by one.
 	 * The last characters at the end of the line are lost. The cursor position
 	 * is not updated
-	 * 
+	 *
 	 * @param count
 	 *            The number of blanks to insert.
 	 */
@@ -728,7 +749,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 	 * Delete one or more characters at the current position and shift the rest
 	 * of the line to the left. Blank character(s) are inserted at the end of
 	 * the line.
-	 * 
+	 *
 	 * @param count
 	 *            The number of characters to delete.
 	 */
@@ -805,7 +826,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 	}
 
 	/**
-	 * 
+	 *
 	 * @return - the starting row of the screen relative to memory.
 	 */
 	public int getStartRow ()
@@ -815,14 +836,14 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Return the text contained in a line of the current screen view.
-	 * 
+	 *
 	 * @param row
 	 *            the screen row [0...HEIGHT-1]
 	 * @param offset
 	 *            the starting column [0...WIDTH-1]
 	 * @param count
 	 *            the number of characters to copy [1...WIDTH-offset]
-	 * 
+	 *
 	 * @return The text contained in the given part of the line. If the number
 	 *         of defined characters in the line is shorter than offset+count
 	 *         only the defined length is returned.
@@ -834,7 +855,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Return a line from global screen memory.
-	 * 
+	 *
 	 * @param row
 	 *            the memory row [0...HEIGHT*PAGES-1]
 	 * @param offset
@@ -847,19 +868,24 @@ public class TerminalScreen extends JPanel implements MouseListener,
 	 */
 	String getMemoryLine ( int row, int offset, int count )
 	{
-		if (row < 0)
+		if (row < 0) {
 			row = 0; // first row
-		else if (row >= HEIGHT * PAGES)
+		} else if (row >= HEIGHT * PAGES)
+		 {
 			row = HEIGHT - 1; // last row
+		}
 
-		if (offset < 0)
+		if (offset < 0) {
 			offset = 0; // first character
-		else if (offset >= WIDTH)
+		} else if (offset >= WIDTH)
+		 {
 			offset = WIDTH - 1; // last character
+		}
 
 		// now clip count to line length
-		if (offset + count > WIDTH)
+		if (offset + count > WIDTH) {
 			count = WIDTH - offset;
+		}
 
 		// check line for used length
 		int idxStart = row * WIDTH + offset;
@@ -918,17 +944,18 @@ public class TerminalScreen extends JPanel implements MouseListener,
 	/**
 	 * Erase one or more characters starting at the cursor position. Does not
 	 * erase beyond the end of the line.
-	 * 
+	 *
 	 * @param count
 	 *            The number of characters to erase.
 	 */
 	public void clearChars ( int count )
 	{
 		int idxLast = idxCursor() + count - 1;
-		if (idxLast > idxEOL())
+		if (idxLast > idxEOL()) {
 			idxLast = idxEOL();
-		else if (idxLast <= idxCursor())
+		} else if (idxLast <= idxCursor()) {
 			idxLast = idxCursor();
+		}
 
 		clear(idxCursor(), idxLast);
 	}
@@ -950,7 +977,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 	{
 		/**
 		 * <pre>
-		 * 1          1 
+		 * 1          1
 		 * 2          2
 		 * 3  x,y     new
 		 * 4          3
@@ -1026,7 +1053,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Shift the viewport up by one line so that the paper moves one line down.
-	 * 
+	 *
 	 * @param rows
 	 *            The number of rows to scroll up.
 	 */
@@ -1039,7 +1066,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Shift the viewport down by one line so that the paper moves one line up.
-	 * 
+	 *
 	 * @param rows
 	 *            The number of rows to scroll down.
 	 */
@@ -1094,7 +1121,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Set the cursor position relative to the current view.
-	 * 
+	 *
 	 * @param row
 	 *            row of cursor cell [0...HEIGHT-1]
 	 * @param col
@@ -1110,7 +1137,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Set the cursor position relative to memory.
-	 * 
+	 *
 	 * @param row
 	 *            row of cursor cell [0...MEMORY_ROWS-1]
 	 * @param col
@@ -1137,7 +1164,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Move the cursor position by increment.
-	 * 
+	 *
 	 * @param deltaRow
 	 *            row movement +=down, -=up
 	 * @param deltaCol
@@ -1162,10 +1189,11 @@ public class TerminalScreen extends JPanel implements MouseListener,
 		}
 
 		// wrap on bottom or top
-		if (yCursor < 0)
+		if (yCursor < 0) {
 			yCursor = HEIGHT - 1;
-		else if (yCursor >= HEIGHT)
+		} else if (yCursor >= HEIGHT) {
 			yCursor = 0;
+		}
 
 		// always show cursor when moving
 		cursorBlink = true;
@@ -1180,15 +1208,17 @@ public class TerminalScreen extends JPanel implements MouseListener,
 	 */
 	private void clipCursorToScreen ()
 	{
-		if (xCursor < 0)
+		if (xCursor < 0) {
 			xCursor = 0;
-		else if (xCursor >= WIDTH)
+		} else if (xCursor >= WIDTH) {
 			xCursor = WIDTH - 1;
+		}
 
-		if (yCursor < 0)
+		if (yCursor < 0) {
 			yCursor = 0;
-		else if (yCursor >= HEIGHT)
+		} else if (yCursor >= HEIGHT) {
 			yCursor = HEIGHT - 1;
+		}
 	}
 
 	/**
@@ -1199,16 +1229,17 @@ public class TerminalScreen extends JPanel implements MouseListener,
 	 */
 	private void clipViewToMemory ()
 	{
-		if (idxStart < 0)
+		if (idxStart < 0) {
 			idxStart = 0;
-		else if (idxStart > (PAGES - 1) * WIDTH * HEIGHT)
+		} else if (idxStart > (PAGES - 1) * WIDTH * HEIGHT) {
 			idxStart = (PAGES - 1) * WIDTH * HEIGHT;
+		}
 	}
 
 	/**
 	 * Set the attribute byte for the following characters. This attribute will
 	 * be used in all subsequent calls to putChar().
-	 * 
+	 *
 	 * @param a
 	 *            0 == normal<br>
 	 *            1 == highlight<br>
@@ -1266,14 +1297,16 @@ public class TerminalScreen extends JPanel implements MouseListener,
 	{
 		char c[] = s.toCharArray();
 
-		for (int i = 0; i < c.length; i++)
-			putByte((byte) c[i]);
+		for (char element : c) {
+			putByte((byte) element);
+		}
 	}
 
 	public void putBytes ( byte b[] )
 	{
-		for (int i = 0; i < b.length; i++)
-			putByte(b[i]);
+		for (byte element : b) {
+			putByte(element);
+		}
 	}
 
 	public void putByte ( byte b )
@@ -1314,8 +1347,12 @@ public class TerminalScreen extends JPanel implements MouseListener,
 		{
 			xCursor--;
 
-			if (xCursor < 0)
+			if (xCursor < 0) {
 				xCursor = 0;
+			} else {
+			// JSI added local action delete character under cursor
+				deleteCharsInLine(1);
+			}
 		}
 		else if (b == HT)
 		{
@@ -1336,8 +1373,9 @@ public class TerminalScreen extends JPanel implements MouseListener,
 		else
 		{
 			// control character?
-			if (b < 32 && !m_displayFunctions)
+			if (b < 32 && !m_displayFunctions) {
 				return;
+			}
 
 			int idx = idxCursor();
 
@@ -1365,8 +1403,9 @@ public class TerminalScreen extends JPanel implements MouseListener,
 			else
 			{
 				// stay in last column of current line
-				if (xCursor >= WIDTH)
+				if (xCursor >= WIDTH) {
 					xCursor = WIDTH - 1;
+				}
 			}
 		}
 
@@ -1384,7 +1423,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 	}
 
 	/**
-	 * 
+	 *
 	 * @param which
 	 *            - SOFTKEYS_MODE or SOFTKEYS_USER
 	 */
@@ -1395,25 +1434,27 @@ public class TerminalScreen extends JPanel implements MouseListener,
 	}
 	public void toggleKeyLabels ()
 	{
-		if (softKeyMode == SOFTKEYS_MODE)
-		softKeyMode = SOFTKEYS_USER;
-		else
+		if (softKeyMode == SOFTKEYS_MODE) {
+			softKeyMode = SOFTKEYS_USER;
+		} else {
 			softKeyMode = SOFTKEYS_MODE;
+		}
 			repaint(100);
 	}
 
 	public String getKeyLabel ( int row, int col )
 	{
-		if (softKeyMode == SOFTKEYS_MODE)
+		if (softKeyMode == SOFTKEYS_MODE) {
 			return softKeysSystem.getButtonText(row, col);
-		else
+		} else {
 			return softKeysUser.getButtonText(row, col);
+		}
 	}
 
 	/**
 	 * Draw a dark background and a lighter tube area with slightly curved
 	 * edges. The actual terminal output goes into a rectangular area.
-	 * 
+	 *
 	 * @param g1
 	 *            The context to draw on.
 	 */
@@ -1421,8 +1462,9 @@ public class TerminalScreen extends JPanel implements MouseListener,
 	{
 		Rectangle rc = getBounds();
 
-		if (rc.width < 2 * borderWidth || rc.height < 2 * borderWidth)
+		if (rc.width < 2 * borderWidth || rc.height < 2 * borderWidth) {
 			return;
+		}
 
 		Graphics2D g = (Graphics2D) g1;
 		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
@@ -1560,7 +1602,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 							g.setPaintMode();
 							g.setColor(cBack);
 							g.fillRect(col * dx, row * dy + descent - 2, dx, dy);
-
+							
 							// paint text in cBack color over background
 							g.setColor(cFore);
 							g.setPaintMode();
@@ -1580,8 +1622,9 @@ public class TerminalScreen extends JPanel implements MouseListener,
 						// using the bitmapped font
 						drawChar(g, screen[idx], col * dx, (row + 1) * dy);
 
-						if ((currAttribute & ATTRIB_UNDERLINE_MASK) == ATTRIB_UNDERLINE_MASK)
+						if ((currAttribute & ATTRIB_UNDERLINE_MASK) == ATTRIB_UNDERLINE_MASK) {
 							drawChar(g, '_', col * dx, (row + 1) * dy);
+						}
 					}
 
 					idx++;
@@ -1596,34 +1639,38 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 				// output cursor position relative to view in 1-based R/C values
 				// R C in line 25
+				/*
 				String str = String.format("%02d %02d", new Object[] {
 						new Integer(yCursor + 1), new Integer(xCursor + 1) });
-
+				*/
+				String str = String.format("%02d %02d", (yCursor + 1), (xCursor + 1));
 				drawString(g, str, (WIDTH - str.length()) * dx / 2,
 						(HEIGHT + 2) * dy);
 
 				// message line)
 				/*
 				 * int globalRow = (idxBOL() - idxBOM()) / WIDTH + 1;
-				 * 
+				 *
 				 * str = String.format("%2d %2d", new Object[] { new
 				 * Integer(globalRow), new Integer(x) });
-				 * 
+				 *
 				 * c = str.toCharArray();
-				 * 
+				 *
 				 * col = (WIDTH - c.length)*dx / 2; row = HEIGHT + 3;
-				 * 
+				 *
 				 * for (int i = 0; i < c.length; i++) { g.drawChars(c, i, 1,
 				 * col, (row + 1) * dy); col+=dx; }
 				 */
 
 				// in Java 1.6 we must use
 				Calendar c = Calendar.getInstance();
+				/*
 				str = String.format("%02d:%02d",
 						new Object[] {
 								new Integer(c.get(Calendar.HOUR_OF_DAY)),
 								new Integer(c.get(Calendar.MINUTE)) });
-
+				*/
+				str = String.format("%02d:%02d",c.get(Calendar.HOUR_OF_DAY),c.get(Calendar.MINUTE));
 				// in Java 1.8 we can use
 				// ZonedDateTime t = ZonedDateTime.now();
 				// str = String.format(
@@ -1633,6 +1680,13 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 				drawString(g, str, (WIDTH - str.length()) * dx / 2,
 						(HEIGHT + 3) * dy);
+				
+				// indicator for remote/local mode
+				if(m_remoteMode) {
+					drawString(g,"Remote",(WIDTH - 8)* dx, (HEIGHT + 4)* dy + dy /3);
+				} else {
+					drawString(g,"Local",(WIDTH - 8)* dx, (HEIGHT + 4)* dy + dy /3);
+				}
 
 				// indicator for insert mode
 				if (m_insertMode)
@@ -1672,7 +1726,11 @@ public class TerminalScreen extends JPanel implements MouseListener,
 		{
 			// show cursor
 			g.setXORMode(backColor);
+			// JSI modify cursor shape
+			/*
 			g.fillRect(xCursor * dx, yCursor * dy + descent + 1, dx, dy);
+			*/
+			g.fillRect(xCursor * dx, yCursor * dy , dx, dy);
 		}
 
 		// restore
@@ -1687,16 +1745,17 @@ public class TerminalScreen extends JPanel implements MouseListener,
 		// which corresponds to 8 x 15 with half pixel shift
 
 		// source position in font image
-		int sx = (int) c * W_CELL;
+		int sx = c * W_CELL;
 		int sy = 0;
 
 		// select proper row
-		if (currentCharSet == CS_ROMAN)
+		if (currentCharSet == CS_ROMAN) {
 			sy = 0;
-		else if (currentCharSet == CS_LINEDRAW)
+		} else if (currentCharSet == CS_LINEDRAW) {
 			sy = H_CELL;
-		else if (currentCharSet == CS_MATH)
+		} else if (currentCharSet == CS_MATH) {
 			sy = 2 * H_CELL;
+		}
 
 		gDest.drawImage(imgFont, x, y - 12, x + dx, y - 12 + dy, sx, sy, sx
 				+ W_CELL, sy + H_CELL, this);
@@ -1706,9 +1765,8 @@ public class TerminalScreen extends JPanel implements MouseListener,
 	{
 		char c[] = s.toCharArray();
 
-		for (int i = 0; i < c.length; i++)
-		{
-			drawChar(g, c[i], x, y);
+		for (char element : c) {
+			drawChar(g, element, x, y);
 			x += dx;
 		}
 	}
@@ -1720,7 +1778,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 	/**
 	 * Neglects attributes.
-	 * 
+	 *
 	 * @return the text content of the terminal memory buffer. In Wndows each
 	 *         line is terminated by a '\n', in all other operating systems the
 	 *         sequence '\n\r' is used.
@@ -1839,6 +1897,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 	private class CursorBlinker extends TimerTask
 	{
 
+		@Override
 		public void run ()
 		{
 			// repaint cursor only.

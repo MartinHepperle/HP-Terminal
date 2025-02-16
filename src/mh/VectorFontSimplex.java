@@ -5,11 +5,11 @@ import java.awt.Graphics;
 /**
  * <pre>
  *  Compact form of Hershey Simplex font.
- * 
+ *
  *  origin: at upper left of cell.
  *  x positive to the right
  *  y positive down
- * 
+ *
  *             'A'       '['    ...  example characters
  *  line
  *    0:  o---------+   [[[[    -----------------
@@ -21,15 +21,15 @@ import java.awt.Graphics;
  *  25:   + A     A     [       --- base line
  *        |             [       26...32 = 8
  *  32:   +---------+   [[[[    -----------------
- * 
+ *
  *  character height = 22
  *  cell height: 33 (then '()[]{}/|[' on subsequent lines just touch)
  *  cell with: [8 ... 30]
  *  0x7f = 127 is a "pen up" code, the pen is lowered again at the next point
  * </pre>
- * 
+ *
  * @author Martin Hepperle
- * 
+ *
  */
 public class VectorFontSimplex
 {
@@ -418,7 +418,7 @@ public class VectorFontSimplex
 			System.out.println("DW CHR_" + (i + 32) + " ");
 		}
 		System.out.println();
-		
+
 		for (int i = 0; i < charVector.length; i++)
 		{
 			System.out.print("CHR_" + (i + 32) + ":   ");
@@ -430,7 +430,7 @@ public class VectorFontSimplex
 				if (charVector[i][j] == 0x7F)
 				{
 					// set bit 7 for moveto
-					;
+
 				}
 				else
 				{
@@ -468,7 +468,7 @@ public class VectorFontSimplex
 	}
 
 	/**
-	 * 
+	 *
 	 * @param sx
 	 *            - width in pixels
 	 * @param sy
@@ -492,7 +492,7 @@ public class VectorFontSimplex
 
 	/**
 	 * Draw a string with this font.
-	 * 
+	 *
 	 * @param g
 	 *            - the context to draw on.
 	 * @param s
@@ -513,7 +513,7 @@ public class VectorFontSimplex
 
 	/**
 	 * Draw a single character.
-	 * 
+	 *
 	 * @param g
 	 *            - the context to draw on.
 	 * @param c
@@ -534,8 +534,8 @@ public class VectorFontSimplex
 
 			byte bb[] = charVector[c];
 
-			int points = (int) bb[1];
-			int width = (int) bb[0];
+			int points = bb[1];
+			int width = bb[0];
 
 			// desired size in pixels
 			int newWidth = m_sizeX;
@@ -545,18 +545,18 @@ public class VectorFontSimplex
 
 			if (m_monospaced)
 			{// massage into MONOSPACED, nominal character height: 22 units
-				fx = (float) newHeight / 22f * (float) newWidth / (float) width;
+				fx = newHeight / 22f * newWidth / width;
 			}
 			else
 			{
 				// PROPORTIONAL, nominal character height: 22 units
-				fx = (float) newHeight / 22f;
+				fx = newHeight / 22f;
 			}
 
-			fy = (float) newHeight / 22f;
+			fy = newHeight / 22f;
 
 			// actual width
-			width = (int) ((float) width * fx);
+			width = (int) (width * fx);
 
 			ret = width;
 
@@ -576,8 +576,9 @@ public class VectorFontSimplex
 						xPt = bb[i++] & 0xff;
 						int yPt = bb[i++] & 0xff;
 
-						if (m_italic)
+						if (m_italic) {
 							xPt -= (yPt - 22) / (2f * fx);
+						}
 
 						xPrev = x + (int) (xPt * fx);
 						yPrev = y + (int) (yPt * fy);
@@ -585,8 +586,9 @@ public class VectorFontSimplex
 					else
 					{
 						int yPt = bb[i++] & 0xff;
-						if (m_italic)
+						if (m_italic) {
 							xPt -= (yPt - 22) / (2f * fx);
+						}
 
 						xPt = x + (int) (xPt * fx);
 						yPt = y + (int) (yPt * fy);
@@ -596,8 +598,9 @@ public class VectorFontSimplex
 					}
 
 					// done?
-					if (i == 2 + points)
+					if (i == 2 + points) {
 						break;
+					}
 
 					// next point
 					xPt = bb[i++] & 0xff;

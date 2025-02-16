@@ -21,7 +21,7 @@ public class Beeper
 	{
 		// preload sample
 		m_Clip = null;
-		
+
 		try
 		{
 			URL url = getClass().getResource("rsc/" + fileName);
@@ -59,12 +59,13 @@ public class Beeper
 
 	protected void close ()
 	{
-		if (m_Clip.isOpen())
+		if (m_Clip.isOpen()) {
 			m_Clip.close();
+		}
 	}
 
 	/**
-	 * 
+	 *
 	 * @param fileName
 	 *            the file name with the sound data. Must be either fully
 	 *            qualified or the file must reside in the current directory.
@@ -75,8 +76,9 @@ public class Beeper
 		{
 			try
 			{
-				if (m_Clip.isRunning())
+				if (m_Clip.isRunning()) {
 					return;
+				}
 
 				m_Clip.start();
 

@@ -1,57 +1,58 @@
 package mh;
 
-import java.awt.Dimension;
-import java.awt.EventQueue;
-import java.awt.Image;
-import java.awt.Point;
-import java.awt.Toolkit;
-
-import javax.swing.JFrame;
-
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
-import java.awt.event.MouseEvent;
-
 import jssc.SerialNativeInterface;
 import jssc.SerialPort;
 import jssc.SerialPortEvent;
 import jssc.SerialPortEventListener;
 import jssc.SerialPortException;
+import org.apache.commons.net.telnet.EchoOptionHandler;
+import org.apache.commons.net.telnet.InvalidTelnetOptionException;
+import org.apache.commons.net.telnet.SuppressGAOptionHandler;
+import org.apache.commons.net.telnet.TelnetClient;
+import org.apache.commons.net.telnet.TelnetInputListener;
+import org.apache.commons.net.telnet.TerminalTypeOptionHandler;
+import org.apache.commons.net.telnet.TelnetNotificationHandler;
 import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.EventQueue;
+import java.awt.Image;
+import java.awt.Point;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintStream;
-import java.net.Socket;
-import java.nio.CharBuffer;
 import java.util.prefs.Preferences;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.nio.charset.StandardCharsets;
+
+import javax.swing.JFrame;
 
 /**
- * 
+ * Terminal emulator main application file
+ *
  * @author Martin Hepperle, July 2019
- * 
+ *
  */
-public class HPTerminalApplication implements SerialPortEventListener
+public class HPTerminalApplication implements TelnetNotificationHandler, SerialPortEventListener
 {
-   static int               DEBUG                = 95;
-
+   static int               DEBUG                = 0;
+   
    final static String      logFileName          = "HPTerminal.log";
    final static String      fileNameHPGL         = "HPTerminal.hpgl";
    BufferedOutputStream     bwLog                = null;
    PrintStream              psHPGL               = null;
 
-   final static String      VERSION_NUMBER       = "0.1";
-   final static String      VERSION_DATE         = "December 2019";
+   final static String      VERSION_NUMBER       = "0.2";
+   final static String      VERSION_DATE         = "February 2025";
 
    // normally always true
    boolean                  localKeys            = true;
@@ -149,6 +150,8 @@ public class HPTerminalApplication implements SerialPortEventListener
    Beeper                   theBeeper;
 
    SerialPort               m_Port;
+   TelnetClient 			tc;
+   boolean                  serialMode;
    Thread                   t                    = null;
 
    // ring buffer for incoming serial data
@@ -175,10 +178,14 @@ public class HPTerminalApplication implements SerialPortEventListener
 
    // if DC1 is received and toSend != null then send this string
    String                   toSend               = null;
+   
+   OutputStream telnetOutputStream				= null;
+   InputStream telnetInputStream  				= null;      
 
+   
    /**
     * Launch the application.
-    * 
+    *
     * @param args
     *           - the command line arguments.
     */
@@ -190,7 +197,8 @@ public class HPTerminalApplication implements SerialPortEventListener
 
       EventQueue.invokeLater(new Runnable()
       {
-         public void run ()
+         @Override
+		public void run ()
          {
             try
             {
@@ -201,6 +209,8 @@ public class HPTerminalApplication implements SerialPortEventListener
                int speed = -1;
                int sound = -1;
                int logger = -1;
+               String telnetHost = null;
+               int telnetPort = -1;
 
                for ( int i = 0; i < args.length; i++ )
                {
@@ -208,6 +218,14 @@ public class HPTerminalApplication implements SerialPortEventListener
                   {
                      port = args[++i];
                   }
+                  else if (args[i].toLowerCase().equals("-telnethost")) 
+			      {
+			    	  telnetHost = args[++i];
+			      }
+                  else if (args[i].toLowerCase().equals("-telnetport") )
+                  {
+                      telnetPort = Integer.parseInt(args[++i]);
+                   }
                   else if ( args[i].toLowerCase().equals("-fontsize") )
                   {
                      fontSize = Integer.parseInt(args[++i]);
@@ -249,18 +267,27 @@ public class HPTerminalApplication implements SerialPortEventListener
                      System.err.println("Unknown parameter '" + args[i] + "'");
                      System.err.println("Usage:");
                      System.err.println("HPTerminalApplication [-port PORTNAME]"
+                    	   + " [-telnetHost HOST]" + " [-telnetPort PORT]"	 
                            + " [-fontsize FONTSIZE]" + " [-speed BAUDRATE]"
                            + " [-sound {0|1}]"
                            + " [-type {ANSI|HP2627A|HP2648A}]"
                            + " [-logging {0|1}]" + " [-debug {0...}]" + " ");
                   }
                }
+               
+               // exit, if both port and telnetHost were specified
+               if(port != null && telnetHost != null ) {
+            	   System.err.println("The port and telnetHost parameter are mutually exclusive. Program terminated");
+            	   System.exit(1);
+               }
 
                HPTerminalApplication theApplication = new HPTerminalApplication(
-                     port, fontSize, speed, sound, logger, terminalID);
+                     port, fontSize, speed, sound, logger, terminalID,telnetHost, telnetPort);
 
-               theApplication.graphicsFrame.setVisible(true);
+               /*
                theApplication.terminalFrame.setVisible(true);
+               theApplication.graphicsFrame.setVisible(terminalSettings.graphicsVisible);
+               */
             }
             catch ( Exception e )
             {
@@ -272,9 +299,10 @@ public class HPTerminalApplication implements SerialPortEventListener
 
    /**
     * Create the application.
-    * 
+    *
     * @param port
-    *           - the port to open, e.g. "COM1" or "\\.\COM27" under Windows.
+    *           - the port to open, e.g. "COM1" or "\\.\COM27" under Windows. If this parameter is not null, then
+    *           - HPTerminal uses a serial connection
     * @param fontSize
     *           - the size of the font, also defines the window dimensions.
     * @param speed
@@ -283,10 +311,15 @@ public class HPTerminalApplication implements SerialPortEventListener
     *           - 0=false, 1=true, negative: use default from properties.
     * @param logger
     *           - whether a log file shall be written.
-    * @terminalModel
+    * @param terminalID
+    *           - Terminal identification
+    * @param telnetHost
+    * 			- Name of the telnet host. If this parameter is not null, then HPTerminal uses a telnet connection
+    * @param telnetPort
+    *			- Telnet port number
     */
    public HPTerminalApplication(String port, int fontSize, int speed, int sound,
-         int logger, int terminalID)
+         int logger, int terminalID, String telnetHost, int telnetPort)
    {
       Preferences p = getPreferences();
 
@@ -294,27 +327,42 @@ public class HPTerminalApplication implements SerialPortEventListener
       terminalSettings.readPreferences(p);
 
       // override settings if defined
-      if ( fontSize > 0 )
-         terminalSettings.FontSize = fontSize;
+      if ( fontSize > 0 ) {
+		terminalSettings.FontSize = fontSize;
+	}
 
-      if ( port != null )
-         terminalSettings.PortName = port;
+      if ( port != null ) {
+		terminalSettings.PortName = port;
+		terminalSettings.telnetHost = "";
+	}
 
-      if ( speed > 0 )
-         terminalSettings.speed = speed;
+      if ( speed > 0 ) {
+		terminalSettings.speed = speed;
+	}
       //
-      if ( sound >= 0 )
-         terminalSettings.Sound = (sound != 0);
+      if ( sound >= 0 ) {
+		terminalSettings.Sound = (sound != 0);
+	}
 
-      if ( terminalID >= 0 )
-         terminalSettings.setTerminalID(terminalID);
+      if ( terminalID >= 0 ) {
+		terminalSettings.setTerminalID(terminalID);
+	}
 
-      if ( logger > -1 )
-         logging = true;
+    if (telnetHost != null ) {
+    	terminalSettings.telnetHost = telnetHost;
+    	terminalSettings.PortName = "";
+    }
+    
+    if(telnetPort > 0) {
+    	terminalSettings.telnetPort = telnetPort;
+    }
+      if ( logger > -1 ) {
+		logging = true;
+	}
 
       initialize();
 
-      // telnetTest();
+  
 
       Point pt = new Point(p.getInt("Alpha.x", 100), p.getInt("Alpha.y", 100));
       terminalFrame.setLocation(pt);
@@ -358,50 +406,156 @@ public class HPTerminalApplication implements SerialPortEventListener
       System.out.println("Debug level     \t= " + DEBUG);
       System.out.println("Logging         \t= " + logging);
       terminalSettings.dump(System.out);
-
-      m_Port = new SerialPort(terminalSettings.PortName);
-
-      try
-      {
-         m_Port.openPort();
-         m_Port.setParams(terminalSettings.speed, SerialPort.DATABITS_8,
-               SerialPort.STOPBITS_1, SerialPort.PARITY_NONE);
-
-         // we are ready
-         // m_Port.setDTR(true);
-         // we are ready to send
-         // m_Port.setRTS(true);
-         // no automatic flow control
-         m_Port.setFlowControlMode(SerialPort.FLOWCONTROL_NONE);
-
-         m_Port.setEventsMask(SerialPort.MASK_RXCHAR);
-
-         m_Port.addEventListener(this);
-
-         remoteMode = true;
-
-         if ( DEBUG > 0 )
-         {
-            showLineStatus(System.out);
-         }
+      
+      if (terminalSettings.PortName != "") {
+    	  serialMode= true;
+      } else {
+    	  serialMode= false;
       }
-      catch ( SerialPortException e )
-      {
-         String msg = String.format(
-               "*** Error: Cannot open serial port '%s'.\r\n", new Object[]
-               { terminalSettings.PortName });
-
-         // go to local mode
-         remoteMode = false;
-         System.err.println(msg);
-         showMessage(msg);
+      if(serialMode) {
+	      m_Port = new SerialPort(terminalSettings.PortName);
+	
+	      try
+	      {
+	         m_Port.openPort();
+	         m_Port.setParams(terminalSettings.speed, SerialPort.DATABITS_8,
+	               SerialPort.STOPBITS_1, SerialPort.PARITY_NONE);
+	
+	         // we are ready
+	         // m_Port.setDTR(true);
+	         // we are ready to send
+	         // m_Port.setRTS(true);
+	         // no automatic flow control
+	         m_Port.setFlowControlMode(SerialPort.FLOWCONTROL_NONE);
+	
+	         m_Port.setEventsMask(SerialPort.MASK_RXCHAR);
+	
+	         m_Port.addEventListener(this);
+	
+	         remoteMode = true;
+	
+	         if ( DEBUG > 0 )
+	         {
+	            showLineStatus(System.out);
+	         }
+	      }
+	      catch ( SerialPortException e )
+	      {
+                 /*
+	         String msg = String.format(
+	               "*** Error: Cannot open serial port '%s'.\r\n", new Object[]
+	               { terminalSettings.PortName });
+                 */
+	         String msg = String.format(
+	               "Cannot open serial port '%s'.\r\n",terminalSettings.PortName );
+	
+	         // go to local mode
+	         remoteMode = false;
+	         System.err.println(msg);
+	         showMessage(msg);
+	      }
+      } else {
+       
+	      // create telnet client
+	      tc = new TelnetClient(terminalSettings.AnswerBack);
+	      tc.registerNotifHandler(this);
+	      // start telnet reader thread
+	      tc.setReaderThread(true);                                   // allows immediate option negotiation
+	      
+	      // negotiation handlers. Allow defining desired initial setting for local/remote activation of an 
+	      // option and behavior in case a local/remote activation request for this option is received.
+	      // Meaning of the 4 boolean parameters
+	      // initlocal== true: a WILL is sent upon connect
+	      // initremote== true: a DO is sent upon connect
+	      // acceptlocal == true: any DO request is accepted
+	      // acceptremote == true: any WILL request is accepted
+	      try { 
+	    	  //RFC 1091. Terminal type option handler
+	          tc.addOptionHandler(new TerminalTypeOptionHandler(terminalSettings.AnswerBack, false, 
+                     false, true, false)); 
+	          // RFC 857, Telnet Echo Option handler 
+	          tc.addOptionHandler(new EchoOptionHandler(false, false, false, false));
+	          // RFC 858, supress go ahead option
+	          tc.addOptionHandler(new SuppressGAOptionHandler(true, true, true, true));
+	      } catch (IOException | InvalidTelnetOptionException e) {
+	    	  String msg = "Error adding Option handlers";
+	            // go to local mode
+	            remoteMode = false;
+	            System.err.println(msg+": "+e.getMessage());
+	            showMessage(msg);
+	     
+	      }
+	      
+	      // register telnet input listener callback
+	      tc.registerInputListener(new TelnetInputListener() {
+	
+	          @Override
+	          public void telnetInputAvailable() {
+	        	  //System.out.println("input available");
+	              try {
+	            	  final byte[] buff= new byte[1024];
+	            	  int readCount = 0;
+	            	  /*
+	            	  do {
+	            		  System.out.println("before input stream read");
+	            		  readCount= telnetInputStream.read(buff);
+	            		  System.out.println("chars read "+readCount);
+	            		  if (readCount > 0) {
+	            			  for(int i=0;i<readCount;i++) putByte(buff[i]);
+	            		  }
+	            	  } while (readCount >0);
+	            	  */
+	            	  readCount= telnetInputStream.read(buff);
+	            	  if(readCount>0) {
+	            		  for(int i=0;i<readCount;i++) putByte(buff[i]);
+	            	  }
+	            	  if(readCount<0) {
+	            		  String msg = "End of telnet stream";
+	            		  remoteMode= false;
+	            		  terminalScreen.setRemoteMode(remoteMode);
+	            		  System.err.println(msg);
+	            		  showMessage(msg);
+	            	  }
+	              }	  
+	             catch (IOException e) {
+	            	 String msg = "Error reading from telnet server";
+	                 // go to local mode
+	                 remoteMode = false;
+	                 terminalScreen.setRemoteMode(remoteMode);
+	                 System.err.println(msg+": "+e.getMessage());
+	                 showMessage(msg);
+	             }   
+	          }
+	      });
+	      
+	      // connect
+	      try {
+	          tc.connect(terminalSettings.telnetHost, terminalSettings.telnetPort);
+	         
+	          remoteMode= true;
+	          //System.out.println("connected");
+	      } catch (IOException  e) {
+	    	  String msg = String.format(
+	                  "Cannot connect to '%s:%d'", terminalSettings.telnetHost,
+	                  terminalSettings.telnetPort);
+	
+	            // go to local mode
+	            remoteMode = false;
+	            System.err.println(msg+": "+e.getMessage());
+	            showMessage(msg);
+	      } 
+	    
+		  telnetInputStream=tc.getInputStream();
+	      telnetOutputStream=tc.getOutputStream();
       }
-
+      // terminal thread
       t = new Thread(new Runnable()
       {
-         public void run ()
+         @Override
+		public void run ()
          {
             // System.out.println("Terminal thread is running");
+            terminalScreen.setRemoteMode(remoteMode);
 
             if ( logging )
             {
@@ -516,10 +670,12 @@ public class HPTerminalApplication implements SerialPortEventListener
                      // "+00360,+00080,000" + CR
                      Point pt = graphicsScreen.getCursorPosition();
                      int c = graphicsScreen.getKeyCode();
+                     /*
                      toSend = String.format("+%05d,+%05d,%03d", new Object[]
                      { new Integer(pt.x), new Integer(pt.y), new Integer(c) })
-                           + (char) CR;
-
+                           + (char) CR; */
+                     toSend = String.format("+%05d,+%05d,%03d", 
+                             pt.x, pt.y, c ) + (char) CR;
                      // assumption: DC1 was already received and
                      // swallowed...
                      // force output by injecting a new DC1 and let the
@@ -601,8 +757,9 @@ public class HPTerminalApplication implements SerialPortEventListener
                         if ( c == CR && inputAvailable() )
                         {
                            // swallow trailing LF from CR-LF pair
-                           if ( peekByte() == LF )
-                              b = nextByte();
+                           if ( peekByte() == LF ) {
+				b = nextByte();
+			    }
                         }
 
                         if ( sbGrafText.length() > 0 )
@@ -616,8 +773,9 @@ public class HPTerminalApplication implements SerialPortEventListener
                            // prepare for next
                            sbGrafText.setLength(0);
                         }
-                        if ( DEBUG > 0 )
-                           System.out.println("\nGLABEL(END);");
+                        if ( DEBUG > 0 ) {
+							System.out.println("\nGLABEL(END);");
+						}
 
                         // parse this Esc as usual
                         escMode = MODE_IDLE;
@@ -627,8 +785,9 @@ public class HPTerminalApplication implements SerialPortEventListener
                      {
                         // collect characters
                         sbGrafText.append((char) c);
-                        if ( DEBUG > 0 )
-                           System.out.print((char) c);
+                        if ( DEBUG > 0 ) {
+							System.out.print((char) c);
+						}
                         continue;
                      }
                   }
@@ -709,8 +868,9 @@ public class HPTerminalApplication implements SerialPortEventListener
                      { // graphics text label until CR, LF or CR+LF
                         escMode = MODE_ESC_GRAPH_LABEL;
 
-                        if ( DEBUG > 0 )
-                           System.out.println("GLABEL(START);");
+                        if ( DEBUG > 0 ) {
+							System.out.println("GLABEL(START);");
+						}
                         continue;
                      }
 
@@ -857,10 +1017,11 @@ public class HPTerminalApplication implements SerialPortEventListener
                            // ESC & q 1 L == HP: lock keyboard
                            {
                               esc.setIndex(2);
-                              if ( '0' == esc.parseCharacter() )
-                                 terminalScreen.lockKeyboard(false);
-                              else
-                                 terminalScreen.lockKeyboard(true);
+                              if ( '0' == esc.parseCharacter() ) {
+								terminalScreen.lockKeyboard(false);
+							} else {
+								terminalScreen.lockKeyboard(true);
+							}
                            }
                               break;
 
@@ -997,8 +1158,9 @@ public class HPTerminalApplication implements SerialPortEventListener
                                  System.out.print('[');
                                  System.out.print(ASCII[c]);
                                  System.out.print(']');
-                                 if ( c == 10 )
-                                    System.out.println();
+                                 if ( c == 10 ) {
+									System.out.println();
+								}
                               }
                               else if ( c < 128 )
                               {
@@ -1070,11 +1232,11 @@ public class HPTerminalApplication implements SerialPortEventListener
                }
             }
          }
-
+         
          /**
           * Handle Escape sequences consisting of a single character after the
           * Esc character.
-          * 
+          *
           * @param esc
           *           - the escape sequence to decode.
           * @return - MODE_IDLE
@@ -1304,7 +1466,7 @@ public class HPTerminalApplication implements SerialPortEventListener
           * <li>send two NULL bytes</li>
           * <li>close file</li>
           * </ul>
-          * 
+          *
           * @param fileName
           *           the name of the file to send.
           * @param millis
@@ -1385,7 +1547,7 @@ public class HPTerminalApplication implements SerialPortEventListener
          /**
           * Handle Esc [ ... sequences. These are usually ANSI terminal
           * sequences which do not interfere with HP sequences.
-          * 
+          *
           * @param esc
           *           - the collected escape sequence.
           * @return - always MODE_IDLE.
@@ -1489,8 +1651,9 @@ public class HPTerminalApplication implements SerialPortEventListener
                   // insert blank line,
                   // shift current and remaining lines down
                   valParam = esc.parseASCIIInteger(1);
-                  while ( valParam-- > 0 )
-                     terminalScreen.insertLine();
+                  while ( valParam-- > 0 ) {
+					terminalScreen.insertLine();
+				}
                   break;
 
                case 'M':
@@ -1498,8 +1661,9 @@ public class HPTerminalApplication implements SerialPortEventListener
                   // delete current line,
                   // shift remaining lines up
                   valParam = esc.parseASCIIInteger(1);
-                  while ( valParam-- > 0 )
-                     terminalScreen.deleteCurrentLine();
+                  while ( valParam-- > 0 ) {
+					terminalScreen.deleteCurrentLine();
+				}
                   break;
 
                case 'P':
@@ -1545,8 +1709,9 @@ public class HPTerminalApplication implements SerialPortEventListener
                   if ( esc.peekCharacter() == '?' )
                   {
                      esc.incrementIndex(1);
-                     if ( esc.peekCharacter() == '7' )
-                        terminalScreen.setLineWrap(true);
+                     if ( esc.peekCharacter() == '7' ) {
+						terminalScreen.setLineWrap(true);
+					}
                   }
                   break;
 
@@ -1556,8 +1721,9 @@ public class HPTerminalApplication implements SerialPortEventListener
                   if ( esc.peekCharacter() == '?' )
                   {
                      esc.incrementIndex(1);
-                     if ( esc.peekCharacter() == '7' )
-                        terminalScreen.setLineWrap(false);
+                     if ( esc.peekCharacter() == '7' ) {
+						terminalScreen.setLineWrap(false);
+					}
                   }
                   break;
 
@@ -1567,10 +1733,11 @@ public class HPTerminalApplication implements SerialPortEventListener
                   if ( esc.peekCharacter() == '>' )
                   {
                      esc.incrementIndex(1);
-                     if ( esc.parseASCIIInteger(0) == 0 )
-                        terminalScreen.homeScreenUp();
-                     else
-                        terminalScreen.homeScreenDown();
+                     if ( esc.parseASCIIInteger(0) == 0 ) {
+						terminalScreen.homeScreenUp();
+					} else {
+						terminalScreen.homeScreenDown();
+					}
                   }
                   break;
 
@@ -1588,7 +1755,7 @@ public class HPTerminalApplication implements SerialPortEventListener
 
          /**
           * Handle [Esc * d] ... Sequences.
-          * 
+          *
           * @param esc
           * @return MODE_IDLE
           */
@@ -1621,8 +1788,9 @@ public class HPTerminalApplication implements SerialPortEventListener
                      {
                         // save only non-empty images
                         if ( graphicsScreen
-                              .saveImage("image" + idxImage + ".png") )
-                           idxImage++;
+                              .saveImage("image" + idxImage + ".png") ) {
+							idxImage++;
+						}
                      }
                      catch ( IOException e )
                      {
@@ -1631,14 +1799,16 @@ public class HPTerminalApplication implements SerialPortEventListener
 
                      if ( count > 0 )
                      {
-                        if ( DEBUG > 0 )
-                           System.out.println("GCLEAR(" + number[0] + ");");
+                        if ( DEBUG > 0 ) {
+							System.out.println("GCLEAR(" + number[0] + ");");
+						}
                         graphicsScreen.clear(number[0]);
                      }
                      else
                      {
-                        if ( DEBUG > 0 )
-                           System.out.println("GCLEAR(0);");
+                        if ( DEBUG > 0 ) {
+							System.out.println("GCLEAR(0);");
+						}
                         graphicsScreen.clear();
                      }
                      break;
@@ -1646,61 +1816,70 @@ public class HPTerminalApplication implements SerialPortEventListener
                      // Esc * d <color#> b == set Graphics memory
                      if ( count > 0 )
                      {
-                        if ( DEBUG > 0 )
-                           System.out.println("GSET(" + number[0] + ");");
+                        if ( DEBUG > 0 ) {
+							System.out.println("GSET(" + number[0] + ");");
+						}
                         graphicsScreen.clear(number[0]);
                      }
                      else
                      {
-                        if ( DEBUG > 0 )
-                           System.out.println("GSET(7);");
+                        if ( DEBUG > 0 ) {
+							System.out.println("GSET(7);");
+						}
                         graphicsScreen.clear(7);
                      }
                      break;
                   case 'c':
                      // Esc * d c == Graphics screen ON
-                     if ( DEBUG > 0 )
-                        System.out.println("GSHOW();");
+                     if ( DEBUG > 0 ) {
+						System.out.println("GSHOW();");
+					}
                      graphicsFrame.setVisible(true);
                      break;
                   case 'd':
                      // Esc * d d == Graphics screen OFF
-                     if ( DEBUG > 0 )
-                        System.out.println("GHIDE();");
+                     if ( DEBUG > 0 ) {
+						System.out.println("GHIDE();");
+					}
                      graphicsFrame.setVisible(false);
                      break;
                   case 'e':
                      // Esc * d e == Alpha screen ON
-                     if ( DEBUG > 0 )
-                        System.out.println("ALPHA(ON);");
+                     if ( DEBUG > 0 ) {
+						System.out.println("ALPHA(ON);");
+					}
                      m_AlphaActive = true;
                      break;
                   case 'f':
                      // Esc * d f == Alpha screen OFF
-                     if ( DEBUG > 0 )
-                        System.out.println("ALPHA(OFF);");
+                     if ( DEBUG > 0 ) {
+						System.out.println("ALPHA(OFF);");
+					}
                      m_AlphaActive = false;
                      break;
                   case 'k':
                      // Esc * d k == Graphics cursor ON
                      graphicsScreen.showGraphicsCursor(true);
-                     if ( DEBUG > 0 )
-                        System.out.println("GCURSOR(ON);");
+                     if ( DEBUG > 0 ) {
+						System.out.println("GCURSOR(ON);");
+					}
                      break;
                   case 'l':
                      // Esc * d l == Graphics cursor OFF
                      graphicsScreen.showGraphicsCursor(false);
-                     if ( DEBUG > 0 )
-                        System.out.println("GCURSOR(OFF);");
+                     if ( DEBUG > 0 ) {
+						System.out.println("GCURSOR(OFF);");
+					}
                      break;
                   case 'o':
                      // Esc * d <x>,<y> o == position Graphics cursor
                      if ( count > 1 )
                      {
                         graphicsScreen.setCursorPosition(number[0], number[1]);
-                        if ( DEBUG > 0 )
-                           System.out.println("GCURSOR(" + number[0] + ","
-                                 + number[1] + ");");
+                        if ( DEBUG > 0 ) {
+							System.out.println("GCURSOR(" + number[0] + ","
+							         + number[1] + ");");
+						}
                      }
                      break;
                   case 'p':
@@ -1709,35 +1888,40 @@ public class HPTerminalApplication implements SerialPortEventListener
                      {
                         graphicsScreen.incrementCursorPosition(number[0],
                               number[1]);
-                        if ( DEBUG > 0 )
-                           System.out.println("GCURSOR by (" + number[0] + ","
-                                 + number[1] + ");");
+                        if ( DEBUG > 0 ) {
+							System.out.println("GCURSOR by (" + number[0] + ","
+							         + number[1] + ");");
+						}
                      }
                      break;
 
                   case 'q':
                      // Esc * d q == Alpha cursor ON
-                     if ( DEBUG > 0 )
-                        System.out.println("ACURSOR(ON);");
+                     if ( DEBUG > 0 ) {
+						System.out.println("ACURSOR(ON);");
+					}
                      terminalScreen.setcursorVisible(true);
                      break;
                   case 'r':
                      // Esc * d r == Alpha cursor OFF
-                     if ( DEBUG > 0 )
-                        System.out.println("ACURSOR(OFF);");
+                     if ( DEBUG > 0 ) {
+						System.out.println("ACURSOR(OFF);");
+					}
                      terminalScreen.setcursorVisible(false);
                      break;
                   case 's':
                      // Esc * d s == Graphics text mode ON
                      escMode = MODE_ESC_GRAPH_TEXT;
                      // graphicsScreen.setDrawMode(2); // Jam1
-                     if ( DEBUG > 0 )
-                        System.out.println("GTEXT(ON);");
+                     if ( DEBUG > 0 ) {
+						System.out.println("GTEXT(ON);");
+					}
                      break;
                   case 't':
                      // Esc * d t == Graphics text mode OFF
-                     if ( DEBUG > 0 )
-                        System.out.println("GTEXT(OFF);");
+                     if ( DEBUG > 0 ) {
+						System.out.println("GTEXT(OFF);");
+					}
                      break;
                   case 'y':
                      // Esc * d 0,0,511,389 y == Graphics size in pixel
@@ -1748,9 +1932,10 @@ public class HPTerminalApplication implements SerialPortEventListener
                      int h = 1 + (number[3] - number[1]);
                      graphicsScreen.setScreenSize(w, h);
 
-                     if ( DEBUG > 0 )
-                        System.out.println("GSIZE " + esc.toString() + "(" + w
+                     if ( DEBUG > 0 ) {
+						System.out.println("GSIZE " + esc.toString() + "(" + w
                               + "x" + h + ")");
+					}
 
                      break;
                   case 'z':
@@ -1773,7 +1958,7 @@ public class HPTerminalApplication implements SerialPortEventListener
          /**
           * Format a 3-digit integer number with leading zeros for cursor
           * position responses sent from the terminal.
-          * 
+          *
           * @param number
           *           - the number to convert
           * @return - a 3 character string with leading zeros (if any).
@@ -1788,7 +1973,7 @@ public class HPTerminalApplication implements SerialPortEventListener
          /**
           * Read as many numeric parameters as we can find respectively as many
           * as fit into number[].
-          * 
+          *
           * @param esc
           *           - the escape sequence to parse.
           * @param number
@@ -1802,8 +1987,9 @@ public class HPTerminalApplication implements SerialPortEventListener
             {
                number[idx] = esc.parseASCIIInteger();
                // end of valid numbers?
-               if ( number[idx] == Integer.MIN_VALUE )
-                  break;
+               if ( number[idx] == Integer.MIN_VALUE ) {
+				break;
+			}
                idx++;
             }
             return idx;
@@ -1811,7 +1997,7 @@ public class HPTerminalApplication implements SerialPortEventListener
 
          /**
           * Handle [Esc * m] ... Sequences.
-          * 
+          *
           * @param esc
           * @return MODE_IDLE
           */
@@ -1839,21 +2025,25 @@ public class HPTerminalApplication implements SerialPortEventListener
                      // Esc * m <n> a, <n> in [0...5]
                      // Esc * m 3 a set draw mode 3
                      int drawMode = 0;
-                     if ( count > 0 )
-                        drawMode = Math.min(number[0], 5);
-                     if ( DEBUG > 0 )
-                        System.out.println("DrawMode(" + drawMode + ");");
+                     if ( count > 0 ) {
+						drawMode = Math.min(number[0], 5);
+					}
+                     if ( DEBUG > 0 ) {
+						System.out.println("DrawMode(" + drawMode + ");");
+					}
                      graphicsScreen.setDrawMode(drawMode);
                      break;
 
                   case 'b':
                      // Esc * m 01 b == set line type 01, <n> in [1...11]
                      int lineType = 0;
-                     if ( count > 0 )
-                        lineType = Math.min(number[0], 11);
+                     if ( count > 0 ) {
+						lineType = Math.min(number[0], 11);
+					}
                      graphicsScreen.setLineStyle(lineType);
-                     if ( DEBUG > 0 )
-                        System.out.println("LT" + lineType + ";");
+                     if ( DEBUG > 0 ) {
+						System.out.println("LT" + lineType + ";");
+					}
                      break;
 
                   case 'e':
@@ -1878,8 +2068,9 @@ public class HPTerminalApplication implements SerialPortEventListener
                   case 'm':
                      // Esc * m <n> m == set text size, <n> in [1...8]
                      int size = 1;
-                     if ( count > 0 )
-                        size = Math.min(number[0], 8);
+                     if ( count > 0 ) {
+						size = Math.min(number[0], 8);
+					}
                      graphicsScreen.setTextSize(size);
                      if ( DEBUG > 0 )
                      {
@@ -1891,8 +2082,9 @@ public class HPTerminalApplication implements SerialPortEventListener
                      // Esc * m 1,2,3,4 n == text orientation
                      // 0, 90, 180, 270 degrees
                      int orientation = 0;
-                     if ( count > 0 )
-                        orientation = (Math.min(number[0], 4) - 1) * 90;
+                     if ( count > 0 ) {
+						orientation = (Math.min(number[0], 4) - 1) * 90;
+					}
                      graphicsScreen.setTextOrientation(orientation);
                      if ( DEBUG > 0 )
                      {
@@ -1931,8 +2123,9 @@ public class HPTerminalApplication implements SerialPortEventListener
                      // Esc * m 0 x == set primary pen 0
                      // Esc * m 7 x == set primary pen 7
                      int pen = number[0];
-                     if ( pen == Integer.MIN_VALUE )
-                        pen = 0;
+                     if ( pen == Integer.MIN_VALUE ) {
+						pen = 0;
+					}
                      pen++; // 1-based
                      graphicsScreen.setForeColor(pen);
                      if ( DEBUG > 0 )
@@ -1950,7 +2143,7 @@ public class HPTerminalApplication implements SerialPortEventListener
 
          /**
           * Handle Esc [*][n] ... Sequences.
-          * 
+          *
           * @param esc
           * @return MODE_IDLE
           */
@@ -1985,7 +2178,7 @@ public class HPTerminalApplication implements SerialPortEventListener
 
          /**
           * Handle [Esc * s] ... Sequences.
-          * 
+          *
           * @param esc
           * @return MODE_IDLE
           */
@@ -2023,10 +2216,13 @@ public class HPTerminalApplication implements SerialPortEventListener
                      // "+00360,+00080,0" + CR
                      pt = graphicsScreen.getPenPosition();
                      n = graphicsScreen.getPenState() ? 1 : 0;
+                     /*
                      toSend = String.format("+%05d,+%05d,%1d", new Object[]
                      { new Integer(pt.x), new Integer(pt.y), new Integer(n) })
                            + (char) CR;
-
+                     */
+		     toSend = String.format("+%05d,+%05d,%1d", pt.x,pt.y,n) + (char) CR;
+                     
                      if ( DEBUG > 0 )
                      {
                         System.out.println("Pen position: " + toSend);
@@ -2038,9 +2234,12 @@ public class HPTerminalApplication implements SerialPortEventListener
                      // immediately returns:
                      // "+00360,+00080" + CR
                      pt = graphicsScreen.getCursorPosition();
+                     /*
                      toSend = String.format("+%05d,+%05d", new Object[]
                      { new Integer(pt.x), new Integer(pt.y) }) + (char) CR;
-
+                     */
+					 toSend = String.format("+%05d,+%05d", pt.x,pt.y) + (char) CR;
+                    
                      if ( DEBUG > 0 )
                      {
                         System.out.println("Cursor position: " + toSend);
@@ -2067,12 +2266,15 @@ public class HPTerminalApplication implements SerialPortEventListener
                      char dpmm = (terminalSettings.TerminalID == TerminalSettings.HP2627A)
                            ? '2'
                            : '3';
-
+                     /*
                      toSend = "+00000,+00000,"
                            + String.format("+%05d,+%05d", new Object[]
                      { new Integer(d.width - 1), new Integer(d.height - 1) })
                            + ",0000" + dpmm + ".,0000" + dpmm + '.' + (char) CR;
-
+                     */
+                     toSend = "+00000,+00000,"
+                             + String.format("+%05d,+%05d", (d.width-1), (d.height-1)) 
+                             + ",0000" + dpmm + ".,0000" + dpmm + '.' + (char) CR;
                      if ( DEBUG > 0 )
                      {
                         System.out.println(
@@ -2109,7 +2311,7 @@ public class HPTerminalApplication implements SerialPortEventListener
 
          /**
           * Handle [Esc & a] ... Sequences.
-          * 
+          *
           * @param escMode
           * @param esc
           *           - the complete Escape sequence (sans Esc )
@@ -2205,7 +2407,7 @@ public class HPTerminalApplication implements SerialPortEventListener
 
          /**
           * Handle [Esc & d] ... Sequences.
-          * 
+          *
           * @param escMode
           * @param esc
           *           - the complete Escape sequence (sans Esc )
@@ -2519,8 +2721,9 @@ public class HPTerminalApplication implements SerialPortEventListener
                      if ( moveMode == MOVE_INC || moveMode == MOVE_REL )
                      {
                         // 3-byte unsigned -> signed
-                        if ( value > 16383 )
-                           value = value - 32768;
+                        if ( value > 16383 ) {
+							value = value - 32768;
+						}
                      }
                   }
                   else if ( numberForm == FORM_BINARY_SHORT )
@@ -2537,8 +2740,9 @@ public class HPTerminalApplication implements SerialPortEventListener
                      }
 
                      // unsigned -> signed
-                     if ( value > 16 )
-                        value = value - 32;
+                     if ( value > 16 ) {
+						value = value - 32;
+					}
                   }
 
                   if ( idx == 0 )
@@ -2615,14 +2819,17 @@ public class HPTerminalApplication implements SerialPortEventListener
 
             byte buff[] = esc.toString().getBytes();
             System.out.print(Integer.toHexString(buff[0]));
-            for ( int i = 1; i < buff.length; i++ )
-               System.out.print(", " + Integer.toHexString(buff[i]));
+            for ( int i = 1; i < buff.length; i++ ) {
+				System.out.print(", " + Integer.toHexString(buff[i]));
+			}
             System.out.println(" )");
          }
       });
 
       // go!
       t.start();
+      terminalFrame.setVisible(true);
+      graphicsFrame.setVisible(terminalSettings.graphicsVisible);
    }
 
    /**
@@ -2672,10 +2879,10 @@ public class HPTerminalApplication implements SerialPortEventListener
          e.printStackTrace();
       }
    }
-
+   
    /**
     * Shows the given message on the terminal screen.
-    * 
+    *
     * @param msg
     *           the message to display. May be terminated by CL,LF to move
     *           cursor to the start of the next line.
@@ -2683,12 +2890,14 @@ public class HPTerminalApplication implements SerialPortEventListener
    private void showMessage ( String msg )
    {
       char s[] = msg.toCharArray();
-      for ( int i = 0; i < s.length; i++ )
-         putByte((byte) s[i]);
+      for (char element : s) {
+		putByte((byte) element);
+	}
    }
 
    /**
-    * 
+    * Get the user preference
+    *
     * @return Preferences
     */
    public static Preferences getPreferences ()
@@ -2722,7 +2931,26 @@ public class HPTerminalApplication implements SerialPortEventListener
       {
          public void windowClosing ( WindowEvent e )
          {
-
+        	 if(remoteMode && (!serialMode)) {
+	        	// shut down connection gracefully
+	        	try {
+	        		tc.setReaderThread(false);
+	        		tc.unregisterInputListener();
+	        		tc.disconnect();
+	        		
+	        		telnetInputStream.close();
+	        		telnetOutputStream.close();
+	        	}
+	        	catch (IOException e2) {
+	        		System.out.println("error on disconnect: "+e2.getMessage());
+	        	}
+	        	try {
+					Thread.sleep(3000);
+				} catch (InterruptedException e1) {
+					// TODO Auto-generated catch block
+					e1.printStackTrace();
+				}
+        	}
             if ( psHPGL != null )
             {
                psHPGL.print(";SP0;");
@@ -2770,8 +2998,9 @@ public class HPTerminalApplication implements SerialPortEventListener
             if ( terminalScreen.isKeyboardLocked() )
             {
                // special function to unlock keyboard
-               if ( e.getKeyCode() == KeyEvent.VK_SCROLL_LOCK )
-                  terminalScreen.lockKeyboard(false);
+               if ( e.getKeyCode() == KeyEvent.VK_SCROLL_LOCK ) {
+				terminalScreen.lockKeyboard(false);
+			}
                return;
             }
 
@@ -2813,10 +3042,11 @@ public class HPTerminalApplication implements SerialPortEventListener
                      }
                      else
                      {
-                        if ( localKeys )
-                           terminalScreen.moveCursor(-1, 0);
-                        else
-                           sendBytes(CUP);
+                        if ( localKeys ) {
+							terminalScreen.moveCursor(-1, 0);
+						} else {
+							sendBytes(CUP);
+						}
                      }
                      break;
 
@@ -2827,25 +3057,28 @@ public class HPTerminalApplication implements SerialPortEventListener
                      }
                      else
                      {
-                        if ( localKeys )
-                           terminalScreen.moveCursor(1, 0); // local action
-                        else
-                           sendBytes(CDN);
+                        if ( localKeys ) {
+							terminalScreen.moveCursor(1, 0); // local action
+						} else {
+							sendBytes(CDN);
+						}
                      }
                      break;
 
                   case KeyEvent.VK_LEFT:
-                     if ( localKeys )
-                        terminalScreen.moveCursor(0, -1); // local action
-                     else
-                        sendBytes(CLEFT);
+                     if ( localKeys ) {
+						terminalScreen.moveCursor(0, -1); // local action
+					} else {
+						sendBytes(CLEFT);
+					}
                      break;
 
                   case KeyEvent.VK_RIGHT:
-                     if ( localKeys )
-                        terminalScreen.moveCursor(0, 1); // local action
-                     else
-                        sendBytes(CRIGHT);
+                     if ( localKeys ) {
+						terminalScreen.moveCursor(0, 1); // local action
+					} else {
+						sendBytes(CRIGHT);
+					}
                      break;
 
                   case KeyEvent.VK_PAGE_UP:
@@ -2865,17 +3098,21 @@ public class HPTerminalApplication implements SerialPortEventListener
                      break;
 
                   case KeyEvent.VK_INSERT:
-                     if ( control )
-                        terminalScreen.insertLine(); // local action
-                     else if ( localKeys )
-                        terminalScreen.toggleInsertMode(); // local action
+                     if ( control ) {
+						terminalScreen.insertLine(); // local action
+					} else if ( localKeys )
+					 {
+						terminalScreen.toggleInsertMode(); // local action
+					}
                      break;
 
                   case KeyEvent.VK_DELETE:
-                     if ( control )
-                        terminalScreen.deleteCurrentLine(); // local action
-                     else if ( localKeys )
-                        terminalScreen.deleteCharsInLine(1); // local action
+                     if ( control ) {
+						terminalScreen.deleteCurrentLine(); // local action
+					} else if ( localKeys )
+					 {
+						terminalScreen.deleteCharsInLine(1); // local action
+					}
                      break;
 
                   case KeyEvent.VK_F1:
@@ -2899,6 +3136,7 @@ public class HPTerminalApplication implements SerialPortEventListener
 
                   case KeyEvent.VK_PAUSE:
                      // break
+                     if(!serialMode) break;
                      System.out.print("Sending 250 ms BREAK");
                      m_Port.sendBreak(250);
                      try
@@ -2922,8 +3160,9 @@ public class HPTerminalApplication implements SerialPortEventListener
 
          public void keyTyped ( KeyEvent e )
          {
-            if ( terminalScreen.isKeyboardLocked() )
-               return;
+            if ( terminalScreen.isKeyboardLocked() ) {
+				return;
+			}
 
             char c = e.getKeyChar();
             boolean control = e.isControlDown();
@@ -2931,7 +3170,7 @@ public class HPTerminalApplication implements SerialPortEventListener
 
             if ( DEBUG > 1 )
             {
-               System.out.println("Key typed: '" + (char) c + "' = 0x"
+               System.out.println("Key typed: '" + c + "' = 0x"
                      + Integer.toHexString(c) + ", Control:" + control
                      + " Shift:" + shift);
             }
@@ -2943,8 +3182,9 @@ public class HPTerminalApplication implements SerialPortEventListener
             }
             else if ( c == KeyEvent.VK_DELETE )
             {
-               if ( !localKeys )
-                  sendByte((byte) c);
+               if ( !localKeys ) {
+				sendByte((byte) c);
+               }
             }
             else
             {
@@ -3005,7 +3245,7 @@ public class HPTerminalApplication implements SerialPortEventListener
    }
 
    /**
-    * 
+    * Function key handler
     * @param c
     *           The key code VK_F1 ... VK_F8.
     * @param shift
@@ -3024,13 +3264,22 @@ public class HPTerminalApplication implements SerialPortEventListener
       {
          // F9 ... F12 are extra function keys,
          // not found on HP hardware.
-         terminalScreen.toggleKeyLabels();
+    	 if(c == KeyEvent.VK_F9) {
+    		 terminalScreen.toggleKeyLabels();
+    	 } else if (c == KeyEvent.VK_F10) {
+    		 terminalSettings.graphicsVisible= ! terminalSettings.graphicsVisible;
+    		 if (terminalSettings.graphicsVisible)  {
+    			 graphicsFrame.setVisible(true);
+    		 } else {
+    			 graphicsFrame.setVisible(false);
+    	 	}
+    	 }
       }
    }
 
    /**
     * Append one byte read from the host to the ring buffer.
-    * 
+    *
     * @param b
     *           - the byte to append.
     */
@@ -3038,9 +3287,10 @@ public class HPTerminalApplication implements SerialPortEventListener
    {
       buffer[ptrWrite] = b;
       ptrWrite++;
-
-      if ( ptrWrite == BUFLEN )
-         ptrWrite = 0;
+      //System.out.println("put byte "+b+" "+(char)b);
+      if ( ptrWrite == BUFLEN ) {
+		ptrWrite = 0;
+	}
 
       if ( ptrWrite == ptrRead )
       {
@@ -3051,7 +3301,7 @@ public class HPTerminalApplication implements SerialPortEventListener
 
    /**
     * Test whether there is anything in the ring buffer.
-    * 
+    *
     * @return true if there is data in the buffer.
     */
    private boolean inputAvailable ()
@@ -3059,21 +3309,21 @@ public class HPTerminalApplication implements SerialPortEventListener
       /**
        * <pre>
        *  <-------  BUFLEN = 32   ------->
-       * {....12345678901234567890........} 
+       * {....12345678901234567890........}
        *  0   4                   24     31
        *      ^                   ^
        *      ptrRead             ptrWrite
        * len = (ptrWrite - ptrRead)
        *     = (24 - 4) = 20
-       * 
-       * {67890............123456789012345} 
+       *
+       * {67890............123456789012345}
        *  0    5           17            31
        *       ^           ^
        *       ptrWrite    ptrRead
        * len = BUFLEN + (ptrWrite - ptrRead)
        *     = 32     + (5 - 17) = 20
-       *     
-       * 
+       *
+       *
        * len = (ptrWrite - ptrRead)
        * if len < 0
        *     len += BUFLEN
@@ -3088,8 +3338,9 @@ public class HPTerminalApplication implements SerialPortEventListener
    int getBufferLength ()
    {
       int len = (ptrWrite - ptrRead);
-      if ( len < 0 )
-         len += BUFLEN;
+      if ( len < 0 ) {
+		len += BUFLEN;
+	}
       return len;
    }
 
@@ -3097,7 +3348,7 @@ public class HPTerminalApplication implements SerialPortEventListener
     * Fetch the next byte from the ring buffer and remove it from the buffer.
     * You should test first with {@link #inputAvailable()} whether there is
     * anything in the buffer.
-    * 
+    *
     * @return The next byte from the ring buffer.
     */
    private byte nextByte ()
@@ -3106,8 +3357,9 @@ public class HPTerminalApplication implements SerialPortEventListener
 
       ptrRead++;
 
-      if ( ptrRead == BUFLEN )
-         ptrRead = 0;
+      if ( ptrRead == BUFLEN ) {
+		ptrRead = 0;
+	}
 
       return b;
    }
@@ -3116,7 +3368,7 @@ public class HPTerminalApplication implements SerialPortEventListener
     * Preview the next byte from the ring buffer. It is not removed from the
     * buffer. You should test first with {@link #inputAvailable()} whether there
     * is anything in the buffer.
-    * 
+    *
     * @return The next byte from the ring buffer.
     */
    private byte peekByte ()
@@ -3127,7 +3379,7 @@ public class HPTerminalApplication implements SerialPortEventListener
    /**
     * Push a byte back into the ring buffer to be read by a following
     * nextByte().
-    * 
+    *
     * @param b
     *           - the value to be placed into the buffer.
     */
@@ -3135,8 +3387,9 @@ public class HPTerminalApplication implements SerialPortEventListener
    {
       ptrRead--;
 
-      if ( ptrRead < 0 )
-         ptrRead = BUFLEN - 1;
+      if ( ptrRead < 0 ) {
+		ptrRead = BUFLEN - 1;
+	}
 
       buffer[ptrRead] = b;
    }
@@ -3174,8 +3427,9 @@ public class HPTerminalApplication implements SerialPortEventListener
             sb.append(']');
          }
 
-         if ( ++i == BUFLEN )
-            i = 0;
+         if ( ++i == BUFLEN ) {
+			i = 0;
+		}
       }
       sb.append('}');
 
@@ -3187,15 +3441,16 @@ public class HPTerminalApplication implements SerialPortEventListener
 
    void warning ( int code, String msg )
    {
-      if ( code < 1 )
-         System.err.println("*** Warning: " + msg);
-      else
-         System.err.println("*** Error: " + msg);
+      if ( code < 1 ) {
+		System.err.println("*** Warning: " + msg);
+	} else {
+		System.err.println("*** Error: " + msg);
+	}
    }
 
    /**
     * Send the given string to the host.
-    * 
+    *
     * @param s
     *           - The ASCII character string to be sent.
     * @return The number of characters sent.
@@ -3203,14 +3458,20 @@ public class HPTerminalApplication implements SerialPortEventListener
    int sendString ( String s )
    {
       int ret = 0;
+      byte b[]= s.getBytes(StandardCharsets.US_ASCII);
 
       if ( remoteMode )
       {
          try
          {
-            if ( m_Port.writeString(s) )
-               ret = s.length();
-
+        	if(serialMode) {
+        		 if ( m_Port.writeString(s) )
+                     ret = s.length();
+        	} else {
+	        	for(int i=0;i<b.length;i++) telnetOutputStream.write(b[i]);
+	        	telnetOutputStream.flush(); 	
+	            ret= b.length;
+        	}
             if ( logging )
             {
                bwLog.write(("      {sent: '" + s.replace("\r", "[CR]") + "'}\n")
@@ -3222,13 +3483,19 @@ public class HPTerminalApplication implements SerialPortEventListener
                System.out.println("-> host '" + s.replace("\r", "[CR]") + "'");
             }
          }
-         catch ( SerialPortException e )
+         catch ( SerialPortException | IOException e )
          {
-            e.printStackTrace();
-         }
-         catch ( IOException e )
-         {
-            e.printStackTrace();
+        	 String msg;
+        	 if (e instanceof SerialPortException) {
+        		 msg = "Error writing to serial port";
+        	 } else {
+        		 msg = "Error writing to telnet server";
+        	 }
+             // go to local mode
+             remoteMode = false;
+             terminalScreen.setRemoteMode(remoteMode);
+             System.err.println(msg+": "+e.getMessage());
+             showMessage(msg);
          }
       }
       else
@@ -3242,7 +3509,7 @@ public class HPTerminalApplication implements SerialPortEventListener
 
    /**
     * Send the given byte to the host.
-    * 
+    *
     * @param theByte
     *           - The byte to send.
     * @return The number of bytes sent.
@@ -3255,19 +3522,24 @@ public class HPTerminalApplication implements SerialPortEventListener
       {
          try
          {
-            m_Port.writeByte((byte) (theByte & 0xFF));
-
+        	 if(serialMode) {
+        		 m_Port.writeByte((byte) (theByte & 0xFF));
+        	 } else {
+	            telnetOutputStream.write((int) (theByte & 0xFF));
+	            telnetOutputStream.flush();
+        	 }
             ret = 1;
 
             if ( logging )
             {
                int c = theByte & 0xFF;
-               if ( c > 31 )
-                  bwLog.write(("      {sent '" + (char) c + "'}\n").getBytes());
-               else
-                  bwLog.write(
+               if ( c > 31 ) {
+            	   	bwLog.write(("      {sent '" + (char) c + "'}\n").getBytes());
+               } else {
+            	   	bwLog.write(
                         ("      {sent 0x" + Integer.toHexString(theByte & 0xFF)
                               + "}\n").getBytes());
+               }
             }
 
             if ( DEBUG > 1 )
@@ -3277,13 +3549,20 @@ public class HPTerminalApplication implements SerialPortEventListener
                            + " = '" + (char) theByte + "'");
             }
          }
-         catch ( SerialPortException e )
+         
+         catch ( SerialPortException | IOException e )
          {
-            e.printStackTrace();
-         }
-         catch ( IOException e )
-         {
-            e.printStackTrace();
+        	 String msg;
+        	 if (e instanceof SerialPortException) {
+        		 msg = "Error writing to serial port";
+        	 } else {
+        		 msg = "Error writing to telnet server";
+        	 }
+             // go to local mode
+             remoteMode = false;
+             terminalScreen.setRemoteMode(remoteMode);
+             System.err.println(msg+": "+e.getMessage());
+             showMessage(msg);
          }
       }
       else
@@ -3297,7 +3576,7 @@ public class HPTerminalApplication implements SerialPortEventListener
 
    /**
     * Send the given bytes to the host.
-    * 
+    *
     * @param b
     *           - An array of bytes to be sent.
     * @return The number of bytes sent.
@@ -3310,17 +3589,25 @@ public class HPTerminalApplication implements SerialPortEventListener
       {
          try
          {
-            if ( m_Port.writeBytes(b) )
-               ret = b.length;
-
+        	if(serialMode) {
+        		 if ( m_Port.writeBytes(b) )
+                     ret = b.length;
+        	} else {
+        		for(int i=0; i < b.length;i++) telnetOutputStream.write(b[i] &0xFF); 
+        		telnetOutputStream.flush();
+        		ret= b.length;
+        	}
+           
+        	
             if ( logging )
             {
                bwLog.write("      {sent: ".getBytes());
 
                for ( int i = 0; i < b.length; i++ )
                {
-                  if ( i > 0 )
-                     bwLog.write(", ".getBytes());
+                  if ( i > 0 ) {
+					bwLog.write(", ".getBytes());
+				}
 
                   bwLog.write(("0x" + Integer.toHexString((byte) (b[i] & 0xFF)))
                         .getBytes());
@@ -3334,21 +3621,28 @@ public class HPTerminalApplication implements SerialPortEventListener
                System.out.print("-> host ");
                for ( int i = 0; i < b.length; i++ )
                {
-                  if ( i > 0 )
-                     System.out.print(", ");
+                  if ( i > 0 ) {
+					System.out.print(", ");
+				}
                   System.out.print(
                         "0x" + Integer.toHexString((byte) (b[i] & 0xFF)));
                }
                System.out.println();
             }
          }
-         catch ( SerialPortException e )
+         catch ( SerialPortException | IOException e )
          {
-            e.printStackTrace();
-         }
-         catch ( IOException e )
-         {
-            e.printStackTrace();
+        	 String msg;
+        	 if (e instanceof SerialPortException) {
+        		 msg = "Error writing to serial port";
+        	 } else {
+        		 msg = "Error writing to telnet server";
+        	 }
+             // go to local mode
+             remoteMode = false;
+             terminalScreen.setRemoteMode(remoteMode);
+             System.err.println(msg+": "+e.getMessage());
+             showMessage(msg);
          }
       }
       else
@@ -3363,10 +3657,10 @@ public class HPTerminalApplication implements SerialPortEventListener
    /**
     * Returns the code of the character key pressed with the Control key. The
     * Control key modifies the raw character code by subtracting 64 from it.
-    * 
+    *
     * @param c
     *           the character code to be modified.
-    * 
+    *
     * @return the character code with the Control key depressed.
     */
    public static byte CTRL ( char c )
@@ -3376,7 +3670,7 @@ public class HPTerminalApplication implements SerialPortEventListener
 
    /**
     * Called when new data arrives at the serial port
-    * 
+    *
     * Copies the data to the ring buffer for later processing.
     */
    public void serialEvent ( SerialPortEvent serialPortEvent )
@@ -3392,9 +3686,8 @@ public class HPTerminalApplication implements SerialPortEventListener
                // append new data to ring buffer
                byte b[] = m_Port.readBytes(count);
 
-               for ( int i = 0; i < b.length; i++ )
-               {
-                  putByte(b[i]);
+               for (byte element : b) {
+                  putByte(element);
                }
 
                if ( DEBUG > 2 )
@@ -3418,212 +3711,36 @@ public class HPTerminalApplication implements SerialPortEventListener
          }
       }
    }
-
    /**
-    * TEST
-    */
-   /**
-    * <pre>
+    * implemented method for TelnetNotificationHandler
     * 
-    * <-- DO 37 (37)
-    * --> WILL 37
-    * <-- WILL 1 (1)
-    * --> DO 1
-    * <-- WILL 3 (3)
-    * --> DO 3
-    * <-- DO 39 (39)
-    * --> WILL 39
-    * <-- DO 31 (31) ... WINDOW_SIZE
-    * --> WILL 31
-    * <-- DO 0 (0)
-    * --> WILL 0
-    * <-- WILL 0 (0)
-    * --> DO 0
-    * <-- SB 37 <0x1 0xf 0x0 0xff 0xf0 >
-    *      <...ÿð>
-    * <-- SB 39 <0x1 0xff 0xf0 >
-    *      <.ÿð>
-    * <-- SB 39 <0x1 0x3 0x53 0x46 0x55 0x54 0x4c 0x4e 0x54 0x56 0x45 0x52 0x3 0x53 0x46 0x55 0x54 0x4c 0x4e 0x54 0x4d 0x4f 0x44 0x45 0xff 0xf0 >
-    *      <..SFUTLNTVER.SFUTLNTMODEÿð>
-    * 
-    * </pre>
-    */
-   public void telnetTest ()
-   {
-      String sHost = "localhost";
-      int port = 23;
-
-      try
-      {
-         java.net.Socket theSocket = new Socket(sHost, port, null, 0);
-         System.out.println(theSocket);
-         InputStream is = theSocket.getInputStream();
-         OutputStream os = theSocket.getOutputStream();
-         PrintStream ps = new PrintStream(os);
-
-         ps.print("\r\n");
-         while ( is.available() == 0 )
-            ;
-
-         // commands
-         final int SE = 240; // subnegotiation end
-         final int NOP = 241;
-         final int MARK = 242;
-         final int BRK = 243;
-         final int IP = 244;
-         final int AO = 245;
-         final int AYT = 246;
-         final int EC = 247;
-         final int EL = 248;
-         final int GA = 249;
-         final int SB = 250; // subnegotiation begin
-         final int WILL = 251;
-         final int WONT = 252;
-         final int DO = 253;
-         final int DONT = 254;
-         final int IAC = 255;
-
-         // options
-         final int _0 = 0;
-         final int ECHO = 1;
-         final int _3 = 3;
-         final int TERMINAL_TYPE = 24;
-         final int WINDOW_SIZE = 31;
-         final int LINEMODE = 34;
-         final int _37 = 37; // -> subnegotiation
-         final int _39 = 39; // -> subnegotiation
-
-         final String options[] =
-         { "0", "Echo", "2", "Suppress Go Ahead", "4", "5", "Timing Mark", "7",
-               "8", "9", "10", "11", "12", "13", "14", "15", "16", "17",
-               "Logout", "19", "20", "21", "22", "23", "Terminal Type", "25",
-               "26", "27", "28", "29", "30", "Window Size", "Speed", "33",
-               "Line Mode", "35", "36", "37", "38", "New Environment", "40",
-               "41", "42", "43", "44", "45", "46", "47", "48", "49" };
-
-         while ( is.available() > 0 )
-         {
-            int b = is.read();
-            switch ( b )
-            {
-               case IAC:
-                  System.out.print("<-- ");
-                  b = is.read();
-                  switch ( b )
-                  {
-                     case WILL:
-                        System.out.print("WILL ");
-                        b = getOption(is, options);
-                        // reply with {IAC DO b} or {IAC DONT b}
-                        switch ( b )
-                        {
-                           case ECHO:
-                              // server will echo, O.K.
-                              ps.write(new byte[]
-                              { (byte) IAC, (byte) DO, (byte) b });
-                           { // send window width and height
-
-                              byte wlo, whi;
-                              byte hlo, hhi;
-                              whi = 0;
-                              wlo = (byte) TerminalScreen.WIDTH;
-                              hhi = 0;
-                              hlo = (byte) TerminalScreen.HEIGHT;
-
-                              System.out.println("--> DO " + b);
-                              ps.write(new byte[]
-                              { (byte) IAC, (byte) SB, (byte) wlo, (byte) whi,
-                                    (byte) hlo, (byte) hhi, (byte) IAC,
-                                    (byte) SE });
-                              System.out
-                                    .println("--> IAC, SB, w,w h,h IAC, SE");
-                           }
-                              break;
-                           default:
-                              ps.write(new byte[]
-                              { (byte) IAC, (byte) DONT, (byte) b });
-                              System.out.println("--> DONT " + b);
-                              break;
-                        }
-                        break;
-                     case BRK:
-                        System.out.println("BRK");
-                        break;
-                     case DO:
-                        System.out.print("DO ");
-                        b = getOption(is, options);
-                        // reply with {IAC WILL b} or {IAC WONT b}
-                        switch ( b )
-                        {
-                           case WINDOW_SIZE:
-                              ps.write(new byte[]
-                              { (byte) IAC, (byte) WILL, (byte) b });
-                              System.out.println("--> WILL " + b);
-                              break;
-                           default:
-                              ps.write(new byte[]
-                              { (byte) IAC, (byte) WONT, (byte) b });
-                              System.out.println("--> WONT " + b);
-                              break;
-                        }
-                        break;
-                     case SB:
-                        System.out.print("SB ");
-                        b = is.read();
-                        System.out.print(b);
-                        System.out.print(" <");
-                        StringBuffer sb = new StringBuffer();
-                        while ( b != SE )
-                        {
-                           b = is.read();
-                           System.out.print("0x" + Integer.toHexString(b));
-                           System.out.print(" ");
-                           sb.append(b > 31 ? (char) b : '.');
-                        }
-                        System.out.println(">");
-                        System.out.println("     <" + sb.toString() + ">");
-                        break;
-                     default:
-                        System.out.print("0x" + Integer.toHexString(b));
-                        System.out.print(" ");
-                        System.out.print(b);
-                        System.out.print(" '");
-                        System.out.print((char) b);
-                        System.out.println("'");
-                        break;
-                  }
-                  break;
-               default:
-                  /*
-                   * System.out.print("0x" + Integer.toHexString(b));
-                   * System.out.print(" "); System.out.print(b);
-                   * System.out.print(" '");
-                   */
-                  System.out.print((char) b);
-                  // System.out.println("'");
-
-                  if ( b == ':' )
-                  {
-                     ps.print("\n");
-                     ps.print("ea55\n");
-                     ps.flush();
-                     while ( is.available() == 0 )
-                        ;
-                  }
-                  break;
-            }
-         }
-
-         os.close();
-         is.close();
-         theSocket.close();
-         System.exit(0);
-      }
-      catch ( IOException e )
-      {
-         // TODO Auto-generated catch block
-         e.printStackTrace();
-      }
+    * Shows recieved negotiation requests
+    **/
+   public void receivedNegotiation(final int negotiation_code, final int option_code) {
+       String command;
+       switch (negotiation_code) {
+       case TelnetNotificationHandler.RECEIVED_DO:
+           command = "DO";
+           break;
+       case TelnetNotificationHandler.RECEIVED_DONT:
+           command = "DONT";
+           break;
+       case TelnetNotificationHandler.RECEIVED_WILL:
+           command = "WILL";
+           break;
+       case TelnetNotificationHandler.RECEIVED_WONT:
+           command = "WONT";
+           break;
+       case TelnetNotificationHandler.RECEIVED_COMMAND:
+           command = "COMMAND";
+           break;
+       default:
+           command = Integer.toString(negotiation_code); // Should not happen
+           break;
+       }
+       if(DEBUG >0) {
+    	   System.out.println("Received " + command + " for option code " + option_code);
+       }
    }
 
    private int getOption ( InputStream is, final String[] options )
