@@ -21,9 +21,8 @@ Status
 ------
 
 Needs testing. The Telenet support was only tested superficially on LINUX, Windows 11 and macOS 10.15.
-The serial support of this branch has not tested by now.
 
 Documentation
 -------------
 
-See the file <em>HP Terminal Emulator.pdf</em> in the <em>resources</em> directory.
+See the file <em>HP Terminal Emulator.pdf</em>.

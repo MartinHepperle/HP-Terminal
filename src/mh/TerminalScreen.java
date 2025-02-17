@@ -40,7 +40,7 @@ import javax.swing.JPopupMenu;
  *
  */
 public class TerminalScreen extends JPanel implements MouseListener,
-		ActionListener
+ActionListener
 {
 	// the size of one screen
 	public static int WIDTH = 80;
@@ -298,7 +298,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 		/*
 		String str = String.format("Memory: %d pages",
 				new Object[] { new Integer(PAGES) });
-		*/
+		 */
 		String str = String.format("Memory: %d pages",PAGES);
 		drawString(g, str, 32, yCursor);
 		yCursor += dy;
@@ -654,7 +654,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 		repaint(10);
 	}
-	
+
 	/**
 	 * Set the remote/local mode
 	 * 
@@ -871,14 +871,14 @@ public class TerminalScreen extends JPanel implements MouseListener,
 		if (row < 0) {
 			row = 0; // first row
 		} else if (row >= HEIGHT * PAGES)
-		 {
+		{
 			row = HEIGHT - 1; // last row
 		}
 
 		if (offset < 0) {
 			offset = 0; // first character
 		} else if (offset >= WIDTH)
-		 {
+		{
 			offset = WIDTH - 1; // last character
 		}
 
@@ -1350,7 +1350,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 			if (xCursor < 0) {
 				xCursor = 0;
 			} else {
-			// JSI added local action delete character under cursor
+				// JSI added local action delete character under cursor
 				deleteCharsInLine(1);
 			}
 		}
@@ -1439,7 +1439,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 		} else {
 			softKeyMode = SOFTKEYS_MODE;
 		}
-			repaint(100);
+		repaint(100);
 	}
 
 	public String getKeyLabel ( int row, int col )
@@ -1575,22 +1575,22 @@ public class TerminalScreen extends JPanel implements MouseListener,
 								// 5 color bits
 								int color = (currAttribute & ATTRIB_COLOR_MASK) >> 4;
 
-								if (color < 8)
-								{
-									// 0...7
-									// foreground color
-									cFore = colorMap[color];
-								}
-								else
-								{
-									color -= 8;
-									if (color < 8)
-									{
-										// 0...7
-										// background color
-										cBack = colorMap[color];
-									}
-								}
+				if (color < 8)
+				{
+					// 0...7
+					// foreground color
+					cFore = colorMap[color];
+				}
+				else
+				{
+					color -= 8;
+					if (color < 8)
+					{
+						// 0...7
+						// background color
+						cBack = colorMap[color];
+					}
+				}
 							}
 						}
 
@@ -1602,7 +1602,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 							g.setPaintMode();
 							g.setColor(cBack);
 							g.fillRect(col * dx, row * dy + descent - 2, dx, dy);
-							
+
 							// paint text in cBack color over background
 							g.setColor(cFore);
 							g.setPaintMode();
@@ -1642,7 +1642,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 				/*
 				String str = String.format("%02d %02d", new Object[] {
 						new Integer(yCursor + 1), new Integer(xCursor + 1) });
-				*/
+				 */
 				String str = String.format("%02d %02d", (yCursor + 1), (xCursor + 1));
 				drawString(g, str, (WIDTH - str.length()) * dx / 2,
 						(HEIGHT + 2) * dy);
@@ -1669,7 +1669,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 						new Object[] {
 								new Integer(c.get(Calendar.HOUR_OF_DAY)),
 								new Integer(c.get(Calendar.MINUTE)) });
-				*/
+				 */
 				str = String.format("%02d:%02d",c.get(Calendar.HOUR_OF_DAY),c.get(Calendar.MINUTE));
 				// in Java 1.8 we can use
 				// ZonedDateTime t = ZonedDateTime.now();
@@ -1680,7 +1680,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 
 				drawString(g, str, (WIDTH - str.length()) * dx / 2,
 						(HEIGHT + 3) * dy);
-				
+
 				// indicator for remote/local mode
 				if(m_remoteMode) {
 					drawString(g,"Remote",(WIDTH - 8)* dx, (HEIGHT + 4)* dy + dy /3);
@@ -1729,7 +1729,7 @@ public class TerminalScreen extends JPanel implements MouseListener,
 			// JSI modify cursor shape
 			/*
 			g.fillRect(xCursor * dx, yCursor * dy + descent + 1, dx, dy);
-			*/
+			 */
 			g.fillRect(xCursor * dx, yCursor * dy , dx, dy);
 		}
 

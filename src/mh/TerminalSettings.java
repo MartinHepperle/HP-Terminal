@@ -100,8 +100,7 @@ public class TerminalSettings
 		p.putInt("TerminalID", TerminalID);
 		p.put("TelnetHost", telnetHost);
 		p.putInt("TelnetPort", telnetPort);
-		p.putBoolean("GraphicsVisible",graphicsVisible);
-				
+		p.putBoolean("GraphicsVisible",graphicsVisible);			
 	}
 
 	public void readPreferences ( Preferences p )
