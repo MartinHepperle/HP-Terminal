@@ -25,7 +25,7 @@ import java.util.TimerTask;
 
 import javax.swing.JPanel;
 
-import com.sun.glass.events.KeyEvent;
+import java.awt.event.KeyEvent;
 
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
@@ -429,6 +429,8 @@ public class TerminalScreen extends JPanel implements MouseListener,
 			 */
 			// from resource in path or .jar file
 			URL url = getClass().getResource("rsc/" + fontFileName);
+            System.out.println(fontFileName);
+            System.out.println(url);
 			InputStream is = url.openStream();
 			theFont = Font.createFont(Font.TRUETYPE_FONT, is);
 			is.close();
